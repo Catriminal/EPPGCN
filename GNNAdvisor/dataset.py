@@ -21,7 +21,7 @@ class custom_dataset(torch.nn.Module):
     """
     data loading for more graphs
     """
-    def __init__(self, path, dim, num_class, load_from_txt=True, verbose=False):
+    def __init__(self, path, dataPath, ratio, dim, num_class, load_from_txt=True, verbose=False):
         super(custom_dataset, self).__init__()
 
         self.nodes = set()
@@ -42,10 +42,15 @@ class custom_dataset(torch.nn.Module):
         self.init_embedding(dim)
         self.init_labels(num_class)
 
-        train = 1
+        # train = 1
+        # self.train_mask = [1] * int(self.num_nodes * train) + [0] * (self.num_nodes  - int(self.num_nodes * train))
+        if ratio == 0.0:
+            self.train_mask = np.genfromtxt(dataPath + '/train_mask', delimiter='\n')
+        else:
+            self.train_mask = np.genfromtxt(dataPath + '/train_mask_' + str(ratio), delimiter='\n')
+        
         val = 0.3
         test = 0.1
-        self.train_mask = [1] * int(self.num_nodes * train) + [0] * (self.num_nodes  - int(self.num_nodes * train))
         self.val_mask = [1] * int(self.num_nodes * val)+ [0] * (self.num_nodes  - int(self.num_nodes * val))
         self.test_mask = [1] * int(self.num_nodes * test) + [0] * (self.num_nodes  - int(self.num_nodes * test))
         self.train_mask = torch.BoolTensor(self.train_mask).cuda()
@@ -62,7 +67,7 @@ class custom_dataset(torch.nn.Module):
             dst_li = []
             start = time.perf_counter()
             for line in fp:
-                src, dst = line.strip('\n').split()
+                src, dst, weight = line.strip('\n').split()
                 src, dst = int(src), int(dst)
                 src_li.append(src)
                 dst_li.append(dst)

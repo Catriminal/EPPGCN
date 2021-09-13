@@ -6,6 +6,7 @@
 #include <vector>
 
 #define WARP_SIZE 32
+// #define WARP_SIZE dimWorker
 
 __global__ void warmup(){}
 
@@ -259,6 +260,26 @@ __global__ void SAG_cuda_kernel(
 }
 
 
+float for_sum_time = 0.0;
+float for_com_time = 0.0;
+float back_sum_time = 0.0;
+float back_com_time = 0.0;
+
+void print_time() {
+    printf("kernel time: %.6f\n", (for_sum_time + for_com_time + back_sum_time + back_com_time)/ 1000);
+    // printf("for_agg_time: %.6f\n", for_sum_time / 1000);
+    // printf("for_com_time: %.6f\n", for_com_time / 1000);
+    // printf("back_agg_time: %.6f\n", back_sum_time / 1000);
+    // printf("back_com_time: %.6f\n", back_com_time / 1000);
+}
+
+void clear_time() {
+    for_sum_time = 0.0;
+    for_com_time = 0.0;
+    back_sum_time = 0.0;
+    back_com_time = 0.0;
+}
+
 ////////////////////////////////////////////
 //
 // Foward Pass (GCN)  node update --> neighbor aggregation
@@ -277,7 +298,19 @@ std::vector<torch::Tensor> spmm_forward_cuda(
     int warpPerBlock
 ) 
 {
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    float time = 0.0;
+
+    cudaEventRecord(start, 0);
     auto tmp = torch::mm(input, weight);
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(start);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    for_com_time += time;
+
     // auto output = torch::zeros_like(tmp);
     auto output = torch::zeros({input.size(0), weight.size(1)}, torch::kCUDA);
     const int dim = output.size(1);
@@ -293,6 +326,9 @@ std::vector<torch::Tensor> spmm_forward_cuda(
     // printf("input: (%d, %d)\n", tmp.size(0), tmp.size(1));
     // printf("dimWorker: %d\n", dimWorker);
     // printf("shared_memory: %d\n", tmp.size(0), tmp.size(1));
+
+
+    cudaEventRecord(start, 0);
 
     AT_DISPATCH_FLOATING_TYPES(input.type(), "spmm_cuda_forward", ([&] {
                                 spmm_forward_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
@@ -311,6 +347,15 @@ std::vector<torch::Tensor> spmm_forward_cuda(
                                     warpPerBlock
                                 );
                             }));
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(start);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    for_sum_time += time;
                                  
     cudaError_t error = cudaGetLastError();
     if(error != cudaSuccess){
@@ -444,6 +489,12 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     // const int shared_memory = warpPerBlock * partSize * sizeof(int) + warpPerBlock * dim * sizeof(float);
     int shared_memory = partSize*warpPerBlock*sizeof(int)+warpPerBlock*dim*sizeof(float);
 
+    float time;
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+
     AT_DISPATCH_FLOATING_TYPES(d_output.type(), "spmm_cuda_backward", ([&] {
                                 spmm_backward_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
                                     d_input_prime.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
@@ -462,6 +513,15 @@ std::vector<torch::Tensor> spmm_backward_cuda(
                                 );
                             }));
 
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(start);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    // cudaEventDestroy(start);
+    // cudaEventDestroy(stop);
+
+    back_sum_time += time;
+
     // check for error
     cudaError_t error = cudaGetLastError();
     if(error != cudaSuccess){
@@ -469,9 +529,14 @@ std::vector<torch::Tensor> spmm_backward_cuda(
         exit(-1);
     }
 
+    cudaEventRecord(start, 0);
     auto d_input = torch::mm(d_input_prime, W.transpose(0,1));
     auto d_weight = torch::mm(X.transpose(0,1), d_input_prime);
-
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(start);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    back_com_time += time;
     return {d_input, d_weight};
 }
 

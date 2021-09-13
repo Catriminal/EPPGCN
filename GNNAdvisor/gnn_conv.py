@@ -58,7 +58,6 @@ class GNNAFunction(torch.autograd.Function):
     def backward(ctx, d_output):
         X, weight = ctx.saved_tensors
         inputInfo = ctx.inputInfo
-
         # print("[Backward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,         #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
 
         # print("[Backward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
@@ -86,6 +85,12 @@ class GCNConv(torch.nn.Module):
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.weights.size(1))
         self.weights.data.uniform_(-stdv, stdv)
+
+    def print_time(self):
+        GNNA.print_time()
+
+    def clear_time(self):
+        GNNA.clear_time()
 
     def forward(self, X, inputInfo):
         '''

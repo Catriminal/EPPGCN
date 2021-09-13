@@ -19,27 +19,30 @@ parser.add_argument("--dataset", type=str, default='amazon0601', help="dataset")
 parser.add_argument("--dim", type=int, default=96, help="input embedding dimension size")
 parser.add_argument("--hidden", type=int, default=16, help="hidden dimension size")
 parser.add_argument("--classes", type=int, default=22, help="output classes size")
+parser.add_argument("--train_ratio", type=float, default=0.0, help="train mask ratio")
 
 # Model training related parameters.
 parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gin'],  help="GCN or GIN")
-parser.add_argument("--num_epoches", type=int, default=200, help="number of epoches for training, default=200")
+parser.add_argument("--num_epoches", type=int, default=100, help="number of epoches for training, default=200")
 
 # Manually set the performance related parameters
 parser.add_argument("--partSize", type=int, default=32, help="neighbor-group size")
 parser.add_argument("--dimWorker", type=int, default=32, help="number of worker threads (MUST < 32)")
-parser.add_argument("--warpPerBlock", type=int, default=4, help="number of warp per block, recommended: GCN: 8, GIN: 2")
+parser.add_argument("--warpPerBlock", type=int, default=8, help="number of warp per block, recommended: GCN: 8, GIN: 2")
 parser.add_argument("--sharedMem", type=int, default=100, help="shared memory size of each block (Quadro P6000 64(KB) sm_61), default=100(KB) for RTX3090 sm_86")
 
 # Additional flags for studies.
-parser.add_argument('--manual_mode', type=str, choices=['True', 'False'], default='True', help="True: use manual config, False: auto config, default: True")
+parser.add_argument('--manual_mode', type=str, choices=['True', 'False'], default='False', help="True: use manual config, False: auto config, default: True")
 parser.add_argument('--verbose_mode', type=str, choices=['True', 'False'], default='False', help="True: verbose mode, False: simple mode, default: False")
 parser.add_argument('--enable_rabbit', type=str, choices=['True', 'False'], default='False', help="True: enable rabbit reordering, False, disable rabbit reordering, default: False (disable for both manual and auto mode).")
-parser.add_argument('--loadFromTxt', type=str, choices=['True', 'False'], default='False', help="True: load the graph TXT edge list, False: load from .npy, default: False (load from npz fast)")
+parser.add_argument('--loadFromTxt', type=str, choices=['True', 'False'], default='True', help="True: load the graph TXT edge list, False: load from .npy, default: False (load from npz fast)")
 parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], default='False', help="True: profile the single SpMM (neighbor aggregation) kernel for number epoches times")
 parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], default='False', help="True: verify the output correctness of a single SpMM (neighbor aggregation) kernel against the CPU reference implementation.")
 
 args = parser.parse_args()
-print(args)
+print()
+print()
+print("||" + args.dataset + "   " + str(args.train_ratio))
 
 partSize, dimWorker, warpPerBlock, sharedMem = args.partSize, args.dimWorker, args.warpPerBlock, args.sharedMem
 manual_mode = args.manual_mode == 'True'
@@ -52,16 +55,17 @@ verify_spmm = args.verify_spmm == 'True'
 # requires GPU for evaluation.
 assert torch.cuda.is_available()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+torch.cuda.set_device(1)
 
 ####################################
 # loading data from files
 ####################################
 if loadFromTxt:
-    path = osp.join(args.dataDir, args.dataset)
-    dataset = custom_dataset(path, args.dim, args.classes, load_from_txt=True, verbose=verbose_mode)
+    path = osp.join(args.dataDir, args.dataset + "_snap")
+    dataset = custom_dataset(path, args.dataDir, args.train_ratio, args.dim, args.classes, load_from_txt=True, verbose=verbose_mode)
 else:
     path = osp.join(args.dataDir, args.dataset+".npz")
-    dataset = custom_dataset(path, args.dim, args.classes, load_from_txt=False, verbose=verbose_mode)
+    dataset = custom_dataset(path, args.dataDir, args.train_ratio, args.dim, args.classes, load_from_txt=False, verbose=verbose_mode)
 
 num_nodes = dataset.num_nodes
 num_edges = dataset.num_edges
@@ -81,6 +85,10 @@ inputInfo = inputProperty(row_pointers, column_index, degrees,
 # Decider for parameter selection.
 ####################################
 inputInfo.decider()
+# print(inputInfo.dimWorker_input)
+# print(inputInfo.dimWorker_hidden)
+# print(inputInfo.warpPerBlock_input)
+# print(inputInfo.warpPerBlock_hidden)
 
 inputInfo = inputInfo.set_input()
 if verbose_mode:
@@ -145,12 +153,18 @@ if args.model == 'gcn':
             super(Net, self).__init__()
             self.conv1 = GCNConv(dataset.num_features, args.hidden)
             self.conv2 = GCNConv(args.hidden, dataset.num_classes)
+        
+        def print_time(self):
+            self.conv1.print_time() # static method. only can count l1+l2 agg time
+            
+        def clear_time(self):
+            self.conv1.clear_time()
 
         def forward(self):
             x = dataset.x
             x = F.relu(self.conv1(x, inputInfo.set_input()))
             x = self.conv2(x, inputInfo.set_hidden())
-            return F.log_softmax(x, dim=1)
+            return x
 else:
     class Net(torch.nn.Module):
         def __init__(self):
@@ -179,25 +193,72 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 ####################################
 # Define training function.
 ####################################
+
+
+for_time = 0.0
+loss_time = 0.0
+back_time = 0.0
+other_time = 0.0
+
 def train():
+    global for_time
+    global loss_time
+    global back_time
+    # global other_time
+    # torch.cuda.synchronize()
+    # start = time.perf_counter()
     model.train()
     optimizer.zero_grad()
-    loss = F.nll_loss(model()[:], dataset.y[:])
+    # torch.cuda.synchronize()
+    # other_time += time.perf_counter() - start
+
+    # torch.cuda.synchronize()
+    # start = time.perf_counter()
+    x = model()
+    # torch.cuda.synchronize()
+    # for_time += time.perf_counter() - start
+
+    # torch.cuda.synchronize()
+    # start = time.perf_counter()
+    x = F.log_softmax(x, dim=1)
+    loss = F.nll_loss(x[dataset.train_mask], dataset.y[dataset.train_mask])
+    # torch.cuda.synchronize()
+    # loss_time += time.perf_counter() - start
+
+    # torch.cuda.synchronize()
+    # start = time.perf_counter()
     loss.backward()
+    # torch.cuda.synchronize()
+    # back_time += time.perf_counter() - start
+
+    # torch.cuda.synchronize()
+    # start = time.perf_counter()
     optimizer.step()
+    # torch.cuda.synchronize()
+    # other_time += time.perf_counter() - start
 
 if __name__ == '__main__':
     # dry run
+
     for _ in range(10):
         train()
     # exit(0)
-
+    for_time = 0.0
+    loss_time = 0.0
+    back_time = 0.0
+    # other_time = 0.0
+    model.clear_time()
     torch.cuda.synchronize()
     start_train = time.perf_counter()
-    for _ in tqdm(range(1, args.num_epoches + 1)):
+    for _ in range(1, args.num_epoches + 1):
+    # for _ in tqdm(range(1, args.num_epoches + 1)):
         train()
     torch.cuda.synchronize()
     train_time = time.perf_counter() - start_train
-
-    print('Time (ms): {:.3f}'.format(train_time*1e3/args.num_epoches))
+    model.print_time()
+    print('for_time: {:.6f}'.format(for_time))
+    print('loss_time: {:.6f}'.format(loss_time))
+    print('back_time: {:.6f}'.format(back_time))
+    print('Time: {:.6f}'.format(train_time))
+    # print('Time (ms): {:.3f}'.format(train_time*1e3/args.num_epoches))
     print()

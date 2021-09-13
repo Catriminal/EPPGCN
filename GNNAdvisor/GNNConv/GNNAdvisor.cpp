@@ -41,6 +41,10 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     int warpPerBlock
   );
 
+void print_time();
+void clear_time();
+
+
 std::vector<torch::Tensor> spmm_forward_cuda_gin(
     torch::Tensor input,
     torch::Tensor weight,
@@ -255,6 +259,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
   m.def("forward", &spmm_forward, "GNNAdvisor forward (CUDA)");
   m.def("backward", &spmm_backward, "GNNAdvisor backward (CUDA)");
+  m.def("print_time", &print_time, "print time");
+  m.def("clear_time", &clear_time, "clear time");
 
   m.def("forward_gin", &spmm_forward_gin, "GNNAdvisor forward GIN (CUDA)");
   m.def("backward_gin", &spmm_backward_gin, "GNNAdvisor forward GIN (CUDA)");
