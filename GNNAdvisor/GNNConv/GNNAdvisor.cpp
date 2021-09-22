@@ -41,6 +41,25 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     int warpPerBlock
   );
 
+std::vector<torch::Tensor> ours_backward_cuda(
+    torch::Tensor d_output,
+    torch::Tensor X,
+    torch::Tensor W,
+    torch::Tensor id,
+    torch::Tensor partPointer,
+    torch::Tensor edgeList,
+    torch::Tensor degrees,
+    int partSize, 
+    int numParts,
+    int blockx, 
+    int blocky
+);
+
+void exclusive_scan(int *part_count, int *part_pointer, int num_parts);
+
+int compact_mask(int *d_input_id, int *d_output_id, int *d_input_edge, int *d_output_edge, int length, int blockSize);
+int compact_part(int *d_input, int *d_output, int length, int blockSize, int partSize);
+
 void print_time();
 void clear_time();
 
@@ -154,6 +173,34 @@ std::vector<torch::Tensor> spmm_backward(
 }
 
 
+std::vector<torch::Tensor> ours_backward(
+    torch::Tensor d_output,
+    torch::Tensor X,
+    torch::Tensor W,
+    torch::Tensor id,
+    torch::Tensor partPointer,
+    torch::Tensor edgeList,
+    torch::Tensor degrees,
+    int partSize, 
+    int numParts,
+    int blockx, 
+    int blocky
+  ) {
+
+  CHECK_INPUT(d_output);
+  CHECK_INPUT(X);
+  CHECK_INPUT(W);
+  CHECK_INPUT(id);
+  CHECK_INPUT(partPointer);
+  CHECK_INPUT(edgeList);
+  CHECK_INPUT(degrees);
+
+  // std::cout << "before ours_backward_cuda." << std::endl;
+  return ours_backward_cuda(d_output, X, W, id, partPointer, 
+                            edgeList, degrees, partSize,
+                            numParts, blockx, blocky);
+}
+
 ////////////////////////////////
 // spmm forward GIN
 ///////////////////////////////
@@ -254,11 +301,57 @@ std::vector<torch::Tensor> build_part(
   return {partPtr, part2Node};
 }
 
+std::vector<torch::Tensor> build_back_part(
+    torch::Tensor edge_mask,
+    torch::Tensor column_index,
+    torch::Tensor node_deg,
+    int valid_node,
+    int back_part_size
+  ) {
+  int num_nodes = node_deg.size(0);
+  int num_edges = edge_mask.size(0);
+
+  auto id = torch::zeros_like(edge_mask);
+  auto edge_list = torch::zeros_like(column_index);
+  // std::cout << "mask before" << std::endl;
+  int valid_len = compact_mask(edge_mask.data_ptr<int>(), id.data_ptr<int>(), column_index.data_ptr<int>(), edge_list.data_ptr<int>(), num_edges, 1024);
+  // std::cout << "mask after " << valid_len << std::endl;
+  if(back_part_size == 0) {
+    int valid_degree = valid_len / valid_node;
+    if(valid_degree < 4) {
+      back_part_size = 4;
+    } else if(valid_degree >= 4 && valid_degree < 16) {
+      back_part_size = 8;
+    } else if(valid_degree >= 16 && valid_degree < 64) {
+      back_part_size = 16;
+    } else if(valid_degree >= 64 && valid_degree < 256) {
+      back_part_size = 32;
+    } else if(valid_degree >= 256 && valid_degree < 512) {
+      back_part_size = 64;
+    }
+  }
+
+  auto part_count = torch::zeros_like(column_index);
+  auto part_pointer = torch::zeros_like(column_index);
+  // std::cout << "part before" << std::endl;
+  int num_parts = compact_part(node_deg.data_ptr<int>(), part_count.data_ptr<int>(), num_nodes, 1024, back_part_size);
+  // std::cout << "part after " << num_parts << std::endl;
+  exclusive_scan(part_count.data_ptr<int>(), part_pointer.data_ptr<int>(), num_parts);
+  // std::cout << "scan after" << std::endl;
+
+  auto info = torch::zeros(2);
+  info[0] = back_part_size;
+  info[1] = num_parts;
+  // std::cout << "info after" << std::endl;
+  return {id, edge_list, part_pointer, info};
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("SAG", &SAG, "GNNAdvisor base Scatter-and-Gather Kernel (CUDA)");
 
   m.def("forward", &spmm_forward, "GNNAdvisor forward (CUDA)");
   m.def("backward", &spmm_backward, "GNNAdvisor backward (CUDA)");
+  m.def("ours_backward", &ours_backward, "ours backward (CUDA)");
   m.def("print_time", &print_time, "print time");
   m.def("clear_time", &clear_time, "clear time");
 
@@ -266,4 +359,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("backward_gin", &spmm_backward_gin, "GNNAdvisor forward GIN (CUDA)");
 
   m.def("build_part", &build_part, "GNNAdvisor backward (CPU)");
+  m.def("build_back_part", &build_back_part, "ours build back part (CUDA)");
   }

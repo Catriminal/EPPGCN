@@ -48,6 +48,8 @@ class custom_dataset(torch.nn.Module):
             self.train_mask = np.genfromtxt(dataPath + '/train_mask', delimiter='\n')
         else:
             self.train_mask = np.genfromtxt(dataPath + '/train_mask_' + str(ratio), delimiter='\n')
+
+        self.init_masks()
         
         val = 0.3
         test = 0.1
@@ -56,6 +58,11 @@ class custom_dataset(torch.nn.Module):
         self.train_mask = torch.BoolTensor(self.train_mask).cuda()
         self.val_mask = torch.BoolTensor(self.val_mask).cuda()
         self.test_mask = torch.BoolTensor(self.test_mask).cuda()
+        
+        self.l1b_edge_mask = torch.IntTensor(self.l1b_edge_mask).cuda()
+        self.l2b_edge_mask = torch.IntTensor(self.l2b_edge_mask).cuda()
+        self.l1b_node_deg = torch.IntTensor(self.l1b_node_deg).cuda()
+        self.l2b_node_deg = torch.IntTensor(self.l2b_node_deg).cuda()
 
     def init_edges(self, path):
         self.g = dgl.DGLGraph()
@@ -139,6 +146,33 @@ class custom_dataset(torch.nn.Module):
         Called from __init__.
         '''
         self.y = torch.ones(self.num_nodes).long().cuda()
+
+    def init_masks(self):
+        self.l1b_train_mask = np.zeros(self.num_nodes, dtype=bool)
+        for src in range(self.num_nodes):
+            for dst in self.column_index[self.row_pointers[src] : self.row_pointers[src + 1]]:
+                if(self.train_mask[src]):
+                    self.l1b_train_mask[src] = True
+                    self.l1b_train_mask[dst] = True
+        self.l1b_edge_mask = np.array([-1] * self.num_edges)
+        self.l2b_edge_mask = np.array([-1] * self.num_edges)
+        self.l1b_node_deg = np.zeros(self.num_nodes)
+        self.l2b_node_deg = np.zeros(self.num_nodes)
+        for src in range(self.num_nodes):
+            for idx in range(self.row_pointers[src], self.row_pointers[src + 1]):
+                dst = self.column_index[idx]
+                if(self.train_mask[dst]):
+                    self.l2b_edge_mask[idx] = src
+                    self.l2b_node_deg[src] += 1
+                if(self.l1b_train_mask[dst]):
+                    self.l1b_edge_mask[idx] = src
+                    self.l1b_node_deg[src] += 1
+        
+        self.l1_valid_node = 0
+        self.l2_valid_node = 0
+        for id in range(self.num_nodes):
+            self.l1_valid_node += 1 if self.l1b_node_deg[id] != 0 else 0
+            self.l2_valid_node += 1 if self.l2b_node_deg[id] != 0 else 0
 
     def rabbit_reorder(self):
         '''

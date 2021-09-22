@@ -40,8 +40,8 @@ parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], defaul
 parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], default='False', help="True: verify the output correctness of a single SpMM (neighbor aggregation) kernel against the CPU reference implementation.")
 
 args = parser.parse_args()
-print()
-print()
+# print()
+# print()
 print("||" + args.dataset + "   " + str(args.train_ratio))
 
 partSize, dimWorker, warpPerBlock, sharedMem = args.partSize, args.dimWorker, args.warpPerBlock, args.sharedMem
@@ -117,6 +117,24 @@ inputInfo.column_index  = inputInfo.column_index.to(device)
 inputInfo.partPtr = partPtr.int().to(device)
 inputInfo.part2Node  = part2Node.int().to(device)
 
+l1_back_input_prop = backInputProperty(degrees=degrees, dim=args.hidden)
+l2_back_input_prop = backInputProperty(degrees=degrees, dim=dataset.num_classes)
+
+l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPointer, l1_back_info = \
+    GNNA.build_back_part(dataset.l1b_edge_mask, inputInfo.column_index, dataset.l1b_node_deg, dataset.l1_valid_node, 0)
+# print("build over")
+l1_back_input_prop.partSize = int(l1_back_info[0].item())
+l1_back_input_prop.numParts = int(l1_back_info[1].item())
+
+l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
+    GNNA.build_back_part(dataset.l2b_edge_mask, inputInfo.column_index, dataset.l2b_node_deg, dataset.l2_valid_node, 0)
+# print(l2_back_input_prop.partPointer)
+# print(l2_back_input_prop.partPointer.size(0))
+# print(l2_back_info)
+l2_back_input_prop.partSize = int(l2_back_info[0].item())
+l2_back_input_prop.numParts = int(l2_back_info[1].item())
+# print("build back part.")
+
 ####################################
 # Verifing a single SpMM kernel
 # against the CPU reference.
@@ -162,8 +180,8 @@ if args.model == 'gcn':
 
         def forward(self):
             x = dataset.x
-            x = F.relu(self.conv1(x, inputInfo.set_input()))
-            x = self.conv2(x, inputInfo.set_hidden())
+            x = F.relu(self.conv1(x, inputInfo.set_input(), l1_back_input_prop))
+            x = self.conv2(x, inputInfo.set_hidden(), l2_back_input_prop)
             return x
 else:
     class Net(torch.nn.Module):
@@ -213,23 +231,23 @@ def train():
     # other_time += time.perf_counter() - start
 
     # torch.cuda.synchronize()
-    # start = time.perf_counter()
+    start = time.perf_counter()
     x = model()
-    # torch.cuda.synchronize()
-    # for_time += time.perf_counter() - start
+    torch.cuda.synchronize()
+    for_time += time.perf_counter() - start
 
     # torch.cuda.synchronize()
-    # start = time.perf_counter()
+    start = time.perf_counter()
     x = F.log_softmax(x, dim=1)
     loss = F.nll_loss(x[dataset.train_mask], dataset.y[dataset.train_mask])
-    # torch.cuda.synchronize()
-    # loss_time += time.perf_counter() - start
+    torch.cuda.synchronize()
+    loss_time += time.perf_counter() - start
 
     # torch.cuda.synchronize()
-    # start = time.perf_counter()
+    start = time.perf_counter()
     loss.backward()
-    # torch.cuda.synchronize()
-    # back_time += time.perf_counter() - start
+    torch.cuda.synchronize()
+    back_time += time.perf_counter() - start
 
     # torch.cuda.synchronize()
     # start = time.perf_counter()

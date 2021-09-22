@@ -30,9 +30,10 @@ class ScatterAndGather(torch.autograd.Function):
 
 class GNNAFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, X, weight, inputInfo):
+    def forward(ctx, X, weight, inputInfo, backInfo):
         ctx.save_for_backward(X, weight)
         ctx.inputInfo = inputInfo
+        ctx.backInfo = backInfo
         ctx.partSize, ctx.dimWorker, ctx.warpPerBlock = \
             inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock
 
@@ -57,15 +58,17 @@ class GNNAFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, d_output):
         X, weight = ctx.saved_tensors
-        inputInfo = ctx.inputInfo
-        # print("[Backward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,         #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
+        backInfo = ctx.backInfo
+        # print("[Backward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,         
+        #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
 
         # print("[Backward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
         #                                                     ctx.dimWorker, ctx.warpPerBlock))
-    
-        d_input, d_weight = GNNA.backward(d_output, X, weight, inputInfo.row_pointers, inputInfo.column_index, 
-                                        inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node,
-                                        ctx.partSize, ctx.dimWorker, ctx.warpPerBlock)
+        # print("before backward.")
+        d_input, d_weight = GNNA.ours_backward(d_output, X, weight, backInfo.id, backInfo.partPointer, 
+                                        backInfo.edgeList, backInfo.degrees,
+                                        backInfo.partSize, backInfo.numParts, backInfo.blockx, backInfo.blocky)
+        # print("after backward.")
         # d_X_prime = GNNA.SAG(d_output, inputInfo.row_pointers, inputInfo.column_index, 
         #                             inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
         #                                 inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
@@ -74,7 +77,7 @@ class GNNAFunction(torch.autograd.Function):
         # print(weight_p.size())
         # d_input =  torch.mm(d_X_prime, weight.permute(1,0));
         # d_weight = torch.mm(X.permute(1,0), d_X_prime);
-        return d_input, d_weight, None
+        return d_input, d_weight, None, None
 
 class GCNConv(torch.nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -92,7 +95,7 @@ class GCNConv(torch.nn.Module):
     def clear_time(self):
         GNNA.clear_time()
 
-    def forward(self, X, inputInfo):
+    def forward(self, X, inputInfo, backInfo):
         '''
         @param:
         X:  the input tensor of the graph node embedding, shape: [n_nodes, n_dim].
@@ -100,7 +103,7 @@ class GCNConv(torch.nn.Module):
         edges: the CSR edge list of the graph, shape: [edge, 1].
         partitioin: for the graph with the part-based optimziation.
         '''
-        return GNNAFunction.apply(X, self.weights, inputInfo)
+        return GNNAFunction.apply(X, self.weights, inputInfo, backInfo)
 
 
 class GNNAFunction_GIN(torch.autograd.Function):

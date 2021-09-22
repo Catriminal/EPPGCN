@@ -162,3 +162,32 @@ class inputProperty(object):
                     print("# auto HIDDEN dimWorker: {}".format(self.dimWorker))
                     print("# auto HIDDEN warpPerBlock: {}".format(self.warpPerBlock))
                     print("# auto HIDDEN reorder_flag: {}".format(self.reorder_status))
+
+
+class backInputProperty(object):
+    def __init__(self, id=None, partPointer=None, edgeList=None, degrees=None,
+                partSize=None, numParts=None, dim=None):
+        self.id = id
+        self.partPointer = partPointer
+        self.edgeList = edgeList
+        self.degrees = degrees
+        self.partSize = partSize
+        self.numParts = numParts
+        self.dim = dim
+        if dim < 8:
+            self.blockx = 2
+            self.blocky = 32
+        elif dim >= 8 and dim < 32:
+            self.blockx = 4
+            self.blocky = 16
+        elif dim >= 32 and dim < 96:
+            self.blockx = 8
+            self.blocky = 8
+        elif dim >= 96 and dim < 192:
+            self.blockx = 16
+            self.blocky = 4
+        elif dim >= 192 and dim < 512:
+            self.blockx = 32
+            self.blocky = 2
+
+        

@@ -8,6 +8,8 @@ setup(
         name='GNNAdvisor', 
         sources=[   
                     'GNNAdvisor.cpp', 
+                    'cuCompactor.cu',
+                    'cuda_error_check.cu',
                     'GNNAdvisor_kernel.cu'
                 ]
         )

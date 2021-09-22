@@ -21,22 +21,22 @@ else:
 partsize_li = [32]          # only effective in manual model
 
 dataset = [
-        # ('cora' 	        , 1433	    , 7   ),        #
-        # ('citeseer'	        , 3703	    , 6   ),        #
-        # ('pubmed'	        , 500	    , 3   ),        #
-        # # ('chameleon'	        , 2325	    , 5   ),    #  
-        # # ('actor'	        , 931	    , 5   ),        #
-        # # ('blog'	        , 512	    , 39   ),           #
-        # # ('reddit'	        , 602	    , 41   ),      
+        ('cora' 	        , 1433	    , 7   ),        #
+        ('citeseer'	        , 3703	    , 6   ),        #
+        ('pubmed'	        , 500	    , 3   ),        #
+        # ('chameleon'	        , 2325	    , 5   ),    #  
+        # ('actor'	        , 931	    , 5   ),        #
+        # ('blog'	        , 512	    , 39   ),           #
+        # ('reddit'	        , 602	    , 41   ),      
         ('youtube'	        , 64	    , 47   ),       #
-        # ('amazon'	        , 96	    , 22   ),       #
+        ('amazon'	        , 96	    , 22   ),       #
 
-        # ('corafull'	        , 64	    , 32   ),       #
-        # ('catalog'	        , 64	    , 32   ),       #
-        # # ('lj'	        , 64	    , 32   ),      
-        # ('twitter'	        , 64	    , 32   ),       #
-        # ('google'	        , 64	    , 32   ),       #
-        # ('dblp'	        , 64	    , 32   ),       #
+        ('corafull'	        , 64	    , 32   ),       #
+        ('catalog'	        , 64	    , 32   ),       #
+        # ('lj'	        , 64	    , 32   ),      
+        ('twitter'	        , 64	    , 32   ),       #
+        ('google'	        , 64	    , 32   ),       #
+        ('dblp'	        , 64	    , 32   ),       #
 
         # ('ppi'	            , 50	    , 121 ),   
 
@@ -54,13 +54,15 @@ dataset = [
         # ( 'amazon0601'  	         , 96	, 22), 
 ]
 
-# ratios = [0.1, 0.3, 0.5, 0.8]
-ratios = [0.3]
+ratios = [0.1, 0.3, 0.5, 0.8]
+# ratios = [0.5]
 
 for partsize in partsize_li:
     for hid in hidden:
         for data, d, c in dataset:
+            # print(data)
             for ratio in ratios:
+                # print(ratio)
                 dataDir = "/home/yc/data_scale_test/" + data
                 # dataDir = "../osdi-ae-graphs/"
                 #--manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {}

@@ -87,6 +87,19 @@ __global__ void spmm_backward_cuda_kernel(
 );
 
 template <typename scalar_t>
+__global__ void ours_backward_cuda_kernel(
+    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_input,
+    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_output,
+    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> ids,
+    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> partPointer,
+    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> edgeList,
+    torch::PackedTensorAccessor32<float,1,torch::RestrictPtrTraits> degrees,
+    const int num_parts,
+    const int dim,  // multiple of 4
+    const int partSize
+);
+
+template <typename scalar_t>
 __global__ void spmm_backward_cuda_kernel_gin(
     torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_input,
     torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_output,
@@ -266,11 +279,11 @@ float back_sum_time = 0.0;
 float back_com_time = 0.0;
 
 void print_time() {
-    printf("kernel time: %.6f\n", (for_sum_time + for_com_time + back_sum_time + back_com_time)/ 1000);
-    // printf("for_agg_time: %.6f\n", for_sum_time / 1000);
-    // printf("for_com_time: %.6f\n", for_com_time / 1000);
-    // printf("back_agg_time: %.6f\n", back_sum_time / 1000);
-    // printf("back_com_time: %.6f\n", back_com_time / 1000);
+    // printf("kernel time: %.6f\n", (for_sum_time + for_com_time + back_sum_time + back_com_time)/ 1000);
+    printf("for_agg_time: %.6f\n", for_sum_time / 1000);
+    printf("for_com_time: %.6f\n", for_com_time / 1000);
+    printf("back_agg_time: %.6f\n", back_sum_time / 1000);
+    printf("back_com_time: %.6f\n", back_com_time / 1000);
 }
 
 void clear_time() {
@@ -538,6 +551,123 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     cudaEventElapsedTime(&time, start, stop);
     back_com_time += time;
     return {d_input, d_weight};
+}
+
+std::vector<torch::Tensor> ours_backward_cuda(
+    torch::Tensor d_output,
+    torch::Tensor X,
+    torch::Tensor W,
+    torch::Tensor id,
+    torch::Tensor partPointer,
+    torch::Tensor edgeList,
+    torch::Tensor degrees,
+    int partSize, 
+    int numParts,
+    int blockx, 
+    int blocky
+) {
+
+    auto d_input_prime = torch::zeros_like(d_output);
+
+    const int dim = d_input_prime.size(1);
+    const int num_nodes = d_input_prime.size(0);
+
+    dim3 blocksize(blockx, blocky);
+    const int grid = numParts / blocksize.y + 1;
+    size_t shared_mem_size = dim * blocksize.y * sizeof(float);
+
+    float time;
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+    // std::cout << "before backward kernel " << numParts << " " << dim << " " << partSize << " " << blockx << " " << blocky << " " << num_nodes << std::endl;
+    AT_DISPATCH_FLOATING_TYPES(d_output.type(), "ours_backward_cuda", ([&] {
+                                ours_backward_cuda_kernel<scalar_t><<<grid, blocksize, shared_mem_size>>>(
+                                    d_input_prime.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
+                                    d_output.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
+                                    id.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
+                                    partPointer.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
+                                    edgeList.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
+                                    degrees.packed_accessor32<float,1,torch::RestrictPtrTraits>(),
+                                    numParts,
+                                    dim,
+                                    partSize
+                                );
+                            }));
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(start);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    // cudaEventDestroy(start);
+    // cudaEventDestroy(stop);
+
+    back_sum_time += time;
+    // std::cout << "after backward kernel" << std::endl;
+    // check for error
+    cudaError_t error = cudaGetLastError();
+    if(error != cudaSuccess){
+        printf("CUDA error: %s\n", cudaGetErrorString(error));
+        exit(-1);
+    }
+
+    cudaEventRecord(start, 0);
+    auto d_input = torch::mm(d_input_prime, W.transpose(0,1));
+    auto d_weight = torch::mm(X.transpose(0,1), d_input_prime);
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(start);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    back_com_time += time;
+    // std::cout << "after backward ready return" << std::endl;
+    return {d_input, d_weight};
+}
+
+template <typename scalar_t>
+__global__ void ours_backward_cuda_kernel(
+    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_input,
+    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_output,
+    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> ids,
+    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> partPointer,
+    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> edgeList,
+    torch::PackedTensorAccessor32<float,1,torch::RestrictPtrTraits> degrees,
+    const int num_parts,
+    const int dim,
+    const int partSize
+) {
+    int partId = blockDim.y * blockIdx.x + threadIdx.y;
+
+	if(partId < num_parts)
+	{
+		int partStart = partPointer[partId];
+        // if(threadIdx.x == 0) {
+        //     printf("%d %d %d\n", partPointer[partId + 1], partPointer[partId], partId);
+        // }
+		int id = ids[partStart];
+		
+		extern __shared__ float feats[];
+		
+		for(int j = threadIdx.x; j < dim; j += blockDim.x)
+			feats[threadIdx.y * dim + j] = 0;
+
+		int size = partPointer[partId + 1] - partPointer[partId];
+		for(int i = 0; i < size; i++)
+		{	
+			int offset = partStart + i;
+			int end_id = edgeList[offset];
+            float src_norm = degrees[id];
+            float weight =  __fmaf_rn(src_norm, degrees[end_id], 0);
+            
+            for(int j = threadIdx.x; j < dim; j += blockDim.x) {
+                feats[threadIdx.y * dim + j] += d_output[end_id][j] * weight;
+            }
+		}
+
+		for(int j = threadIdx.x; j < dim; j += blockDim.x) {
+            atomicAdd(&(d_input[id][j]), feats[threadIdx.y * dim + j]);
+		}
+	}
 }
 
 template <typename scalar_t>
