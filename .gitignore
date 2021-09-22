@@ -19,3 +19,4 @@ osdi-ae-graphs-mtx.tar.gz
 cmake-3.16.5
 *__pycache__*
 GNNAdvisor/nvprof_re/*
+GNNAdvisor/*.txt
