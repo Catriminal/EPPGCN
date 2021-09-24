@@ -212,24 +212,24 @@ def train():
     # torch.cuda.synchronize()
     # other_time += time.perf_counter() - start
 
-    # torch.cuda.synchronize()
-    # start = time.perf_counter()
+    torch.cuda.synchronize()
+    start = time.perf_counter()
     x = model()
-    # torch.cuda.synchronize()
-    # for_time += time.perf_counter() - start
+    torch.cuda.synchronize()
+    for_time += time.perf_counter() - start
 
-    # torch.cuda.synchronize()
-    # start = time.perf_counter()
+    torch.cuda.synchronize()
+    start = time.perf_counter()
     x = F.log_softmax(x, dim=1)
     loss = F.nll_loss(x[dataset.train_mask], dataset.y[dataset.train_mask])
-    # torch.cuda.synchronize()
-    # loss_time += time.perf_counter() - start
+    torch.cuda.synchronize()
+    loss_time += time.perf_counter() - start
 
-    # torch.cuda.synchronize()
-    # start = time.perf_counter()
+    torch.cuda.synchronize()
+    start = time.perf_counter()
     loss.backward()
-    # torch.cuda.synchronize()
-    # back_time += time.perf_counter() - start
+    torch.cuda.synchronize()
+    back_time += time.perf_counter() - start
 
     # torch.cuda.synchronize()
     # start = time.perf_counter()

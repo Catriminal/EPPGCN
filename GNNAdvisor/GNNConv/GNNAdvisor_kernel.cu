@@ -266,11 +266,11 @@ float back_sum_time = 0.0;
 float back_com_time = 0.0;
 
 void print_time() {
-    printf("kernel time: %.6f\n", (for_sum_time + for_com_time + back_sum_time + back_com_time)/ 1000);
-    // printf("for_agg_time: %.6f\n", for_sum_time / 1000);
-    // printf("for_com_time: %.6f\n", for_com_time / 1000);
-    // printf("back_agg_time: %.6f\n", back_sum_time / 1000);
-    // printf("back_com_time: %.6f\n", back_com_time / 1000);
+    // printf("kernel time: %.6f\n", (for_sum_time + for_com_time + back_sum_time + back_com_time)/ 1000);
+    printf("for_agg_time: %.6f\n", for_sum_time / 1000);
+    printf("for_com_time: %.6f\n", for_com_time / 1000);
+    printf("back_agg_time: %.6f\n", back_sum_time / 1000);
+    printf("back_com_time: %.6f\n", back_com_time / 1000);
 }
 
 void clear_time() {
