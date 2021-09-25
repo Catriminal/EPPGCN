@@ -39,6 +39,9 @@ parser.add_argument('--loadFromTxt', type=str, choices=['True', 'False'], defaul
 parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], default='False', help="True: profile the single SpMM (neighbor aggregation) kernel for number epoches times")
 parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], default='False', help="True: verify the output correctness of a single SpMM (neighbor aggregation) kernel against the CPU reference implementation.")
 
+parser.add_argument("--l1_backsize", type=int, default=0, help="l1_back_part_size")
+parser.add_argument("--l2_backsize", type=int, default=0, help="l2_back_part_size")
+
 args = parser.parse_args()
 # print()
 # print()
@@ -120,14 +123,23 @@ inputInfo.part2Node  = part2Node.int().to(device)
 l1_back_input_prop = backInputProperty(degrees=degrees, dim=args.hidden)
 l2_back_input_prop = backInputProperty(degrees=degrees, dim=dataset.num_classes)
 
+# l1_model_input = ""
+# l2_model_input = ""
+# if args.backsize_model == "net":
+#     l1_model_input = args.dataset + "_b1" if args.train_ratio == 0 else args.dataset + "_b1_" + str(args.train_ratio)
+#     l2_model_input = args.dataset + "_b2" if args.train_ratio == 0 else args.dataset + "_b2_" + str(args.train_ratio)
+
+# print(l1_model_input)
+# print(l2_model_input)
+
 l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPointer, l1_back_info = \
-    GNNA.build_back_part(dataset.l1b_edge_mask, inputInfo.column_index, dataset.l1b_node_deg, dataset.l1_valid_node, 0)
+    GNNA.build_back_part(dataset.l1b_edge_mask, inputInfo.column_index, dataset.l1b_node_deg, dataset.l1_valid_node, args.l1_backsize)
 # print("build over")
 l1_back_input_prop.partSize = int(l1_back_info[0].item())
 l1_back_input_prop.numParts = int(l1_back_info[1].item())
 
 l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
-    GNNA.build_back_part(dataset.l2b_edge_mask, inputInfo.column_index, dataset.l2b_node_deg, dataset.l2_valid_node, 0)
+    GNNA.build_back_part(dataset.l2b_edge_mask, inputInfo.column_index, dataset.l2b_node_deg, dataset.l2_valid_node, args.l2_backsize)
 # print(l2_back_input_prop.partPointer)
 # print(l2_back_input_prop.partPointer.size(0))
 # print(l2_back_info)

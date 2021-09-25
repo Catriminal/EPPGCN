@@ -1,6 +1,7 @@
 #include <torch/extension.h>
 #include <vector>
-
+#include <string>
+using namespace std;
 torch::Tensor SAG_cuda(
     torch::Tensor input,
     torch::Tensor row_pointers,
@@ -317,18 +318,30 @@ std::vector<torch::Tensor> build_back_part(
   int valid_len = compact_mask(edge_mask.data_ptr<int>(), id.data_ptr<int>(), column_index.data_ptr<int>(), edge_list.data_ptr<int>(), num_edges, 1024);
   // std::cout << "mask after " << valid_len << std::endl;
   if(back_part_size == 0) {
-    int valid_degree = valid_len / valid_node;
-    if(valid_degree < 4) {
-      back_part_size = 4;
-    } else if(valid_degree >= 4 && valid_degree < 16) {
-      back_part_size = 8;
-    } else if(valid_degree >= 16 && valid_degree < 64) {
-      back_part_size = 16;
-    } else if(valid_degree >= 64 && valid_degree < 256) {
-      back_part_size = 32;
-    } else if(valid_degree >= 256 && valid_degree < 512) {
-      back_part_size = 64;
-    }
+    // if(model_input == "") {
+      int valid_degree = valid_len / valid_node;
+      if(valid_degree < 4) {
+        back_part_size = 4;
+      } else if(valid_degree >= 4 && valid_degree < 16) {
+        back_part_size = 8;
+      } else if(valid_degree >= 16 && valid_degree < 64) {
+        back_part_size = 16;
+      } else if(valid_degree >= 64 && valid_degree < 256) {
+        back_part_size = 32;
+      } else if(valid_degree >= 256 && valid_degree < 512) {
+        back_part_size = 64;
+      }
+    // } else {
+      // string cmd = "/home/yc/param_opt/param_pred.py --dataset " + model_input;
+      // FILE *fp;
+      // if(fp = popen(cmd.data(), "r")) {
+      //   char line[50];
+      //   if(fgets(line, sizeof(line) - 1, fp) != NULL) {
+      //     back_part_size = atoi(line);
+      //   }
+      // }
+      // pclose(fp);
+    // }
   }
 
   auto part_count = torch::zeros_like(column_index);
