@@ -275,15 +275,19 @@ __global__ void SAG_cuda_kernel(
 
 float for_sum_time = 0.0;
 float for_com_time = 0.0;
+float l1_back_sum_time = 0.0;
+float l2_back_sum_time = 0.0;
 float back_sum_time = 0.0;
 float back_com_time = 0.0;
 
 void print_time() {
     // printf("kernel time: %.6f\n", (for_sum_time + for_com_time + back_sum_time + back_com_time)/ 1000);
-    printf("for_agg_time: %.6f\n", for_sum_time / 1000);
-    printf("for_com_time: %.6f\n", for_com_time / 1000);
-    printf("back_agg_time: %.6f\n", back_sum_time / 1000);
-    printf("back_com_time: %.6f\n", back_com_time / 1000);
+    // printf("for_agg_time: %.6f\n", for_sum_time / 1000);
+    // printf("for_com_time: %.6f\n", for_com_time / 1000);
+    // printf("back_agg_time: %.6f\n", back_sum_time / 1000);
+    // printf("back_com_time: %.6f\n", back_com_time / 1000);
+    printf("l1_back_agg_time: %.6f\n", l1_back_sum_time / 1000);
+    printf("l2_back_agg_time: %.6f\n", l2_back_sum_time / 1000);
 }
 
 void clear_time() {
@@ -291,6 +295,8 @@ void clear_time() {
     for_com_time = 0.0;
     back_sum_time = 0.0;
     back_com_time = 0.0;
+    l1_back_sum_time = 0.0;
+    l2_back_sum_time = 0.0;
 }
 
 ////////////////////////////////////////////
@@ -639,6 +645,7 @@ std::vector<torch::Tensor> ours_backward_cuda(
     torch::Tensor degrees,
     int partSize, 
     int numParts,
+    int layer,
     int blockx, 
     int blocky
 ) {
@@ -678,8 +685,12 @@ std::vector<torch::Tensor> ours_backward_cuda(
     cudaEventElapsedTime(&time, start, stop);
     // cudaEventDestroy(start);
     // cudaEventDestroy(stop);
-
     back_sum_time += time;
+    if(layer == 1) {
+        l1_back_sum_time += time;
+    } else if(layer == 2) {
+        l2_back_sum_time += time;
+    }
     // std::cout << "after backward kernel" << std::endl;
     // check for error
     cudaError_t error = cudaGetLastError();

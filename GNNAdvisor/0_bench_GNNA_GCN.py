@@ -26,21 +26,21 @@ partsize_li = [32]          # only effective in manual model
 
 dataset = [
         ('cora' 	        , 1433	    , 7 ,  ),        #
-        ('citeseer'	        , 3703	    , 6 ,  ),        #
-        ('pubmed'	        , 500	    , 3    ),        #
-        # ('chameleon'	        , 2325	    , 5   ),    #  
-        # ('actor'	        , 931	    , 5   ),        #
-        # ('blog'	        , 512	    , 39   ),           #
-        # ('reddit'	        , 602	    , 41   ),      
-        ('youtube'	        , 64	    , 47   ),       #
-        ('amazon'	        , 96	    , 22   ),       #
+        # ('citeseer'	        , 3703	    , 6 ,  ),        #
+        # ('pubmed'	        , 500	    , 3    ),        #
+        # # ('chameleon'	        , 2325	    , 5   ),    #  
+        # # ('actor'	        , 931	    , 5   ),        #
+        # # ('blog'	        , 512	    , 39   ),           #
+        # # ('reddit'	        , 602	    , 41   ),      
+        # ('youtube'	        , 64	    , 47   ),       #
+        # ('amazon'	        , 96	    , 22   ),       #
 
-        ('corafull'	        , 64	    , 32   ),       #
-        ('catalog'	        , 64	    , 32   ),       #
-        # ('lj'	        , 64	    , 32   ),      
-        ('twitter'	        , 64	    , 32   ),       #
-        ('google'	        , 64	    , 32   ),       #
-        ('dblp'	        , 64	    , 32   ),       #
+        # ('corafull'	        , 64	    , 32   ),       #
+        # ('catalog'	        , 64	    , 32   ),       #
+        # # ('lj'	        , 64	    , 32   ),      
+        # ('twitter'	        , 64	    , 32   ),       #
+        # ('google'	        , 64	    , 32   ),       #
+        # ('dblp'	        , 64	    , 32   ),       #
 
         # ('ppi'	            , 50	    , 121 ),   
 
@@ -58,8 +58,8 @@ dataset = [
         # ( 'amazon0601'  	         , 96	, 22), 
 ]
 
-ratios = [0.1, 0.3, 0.5, 0.8]
-# ratios = [0.5]
+# ratios = [0.1, 0.3, 0.5, 0.8]
+ratios = [0.5]
 
 backsize = { 'cora' :       {0.1 : [2, 1], 0.3 : [3, 2], 0.5 : [3, 3], 0.8 : [3, 3]},
              'citeseer' :   {0.1 : [2, 1], 0.3 : [2, 2], 0.5 : [2, 2], 0.8 : [2, 2]},
@@ -95,6 +95,7 @@ for partsize in partsize_li:
                             --manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {} --l1_backsize {}  --l2_backsize {}"
                 command = command.format(data, d, hid, c, partsize, model, warpPerBlock,\
                                         manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir, ratio, l1_backsize, l2_backsize)		
+                print(command)
                                         # manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir)		
                 # command = "python GNNA_main.py -loadFromTxt --dataset {} --partSize {} --dataDir {}".format(data, partsize, '/home/yuke/.graphs/orig')		 
                 os.system(command)

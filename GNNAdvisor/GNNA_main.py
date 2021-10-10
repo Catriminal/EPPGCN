@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import time
 import argparse
@@ -120,8 +121,8 @@ inputInfo.column_index  = inputInfo.column_index.to(device)
 inputInfo.partPtr = partPtr.int().to(device)
 inputInfo.part2Node  = part2Node.int().to(device)
 
-l1_back_input_prop = backInputProperty(degrees=degrees, dim=args.hidden)
-l2_back_input_prop = backInputProperty(degrees=degrees, dim=dataset.num_classes)
+l1_back_input_prop = backInputProperty(degrees=degrees, dim=args.hidden, layer=1)
+l2_back_input_prop = backInputProperty(degrees=degrees, dim=dataset.num_classes, layer=2)
 
 # l1_model_input = ""
 # l2_model_input = ""

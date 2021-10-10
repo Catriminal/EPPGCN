@@ -52,6 +52,7 @@ std::vector<torch::Tensor> ours_backward_cuda(
     torch::Tensor degrees,
     int partSize, 
     int numParts,
+    int layer,
     int blockx, 
     int blocky
 );
@@ -184,6 +185,7 @@ std::vector<torch::Tensor> ours_backward(
     torch::Tensor degrees,
     int partSize, 
     int numParts,
+    int layer,
     int blockx, 
     int blocky
   ) {
@@ -199,7 +201,7 @@ std::vector<torch::Tensor> ours_backward(
   // std::cout << "before ours_backward_cuda." << std::endl;
   return ours_backward_cuda(d_output, X, W, id, partPointer, 
                             edgeList, degrees, partSize,
-                            numParts, blockx, blocky);
+                            numParts, layer, blockx, blocky);
 }
 
 ////////////////////////////////

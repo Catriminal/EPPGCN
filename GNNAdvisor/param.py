@@ -166,7 +166,7 @@ class inputProperty(object):
 
 class backInputProperty(object):
     def __init__(self, id=None, partPointer=None, edgeList=None, degrees=None,
-                partSize=None, numParts=None, dim=None):
+                partSize=None, numParts=None, dim=None, layer=None):
         self.id = id
         self.partPointer = partPointer
         self.edgeList = edgeList
@@ -174,6 +174,7 @@ class backInputProperty(object):
         self.partSize = partSize
         self.numParts = numParts
         self.dim = dim
+        self.layer = layer
         if dim < 8:
             self.blockx = 2
             self.blocky = 32

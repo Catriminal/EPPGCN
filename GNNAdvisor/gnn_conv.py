@@ -67,7 +67,7 @@ class GNNAFunction(torch.autograd.Function):
         # print("before backward.")
         d_input, d_weight = GNNA.ours_backward(d_output, X, weight, backInfo.id, backInfo.partPointer, 
                                         backInfo.edgeList, backInfo.degrees,
-                                        backInfo.partSize, backInfo.numParts, backInfo.blockx, backInfo.blocky)
+                                        backInfo.partSize, backInfo.numParts, backInfo.layer, backInfo.blockx, backInfo.blocky)
         # print("after backward.")
         # d_X_prime = GNNA.SAG(d_output, inputInfo.row_pointers, inputInfo.column_index, 
         #                             inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
