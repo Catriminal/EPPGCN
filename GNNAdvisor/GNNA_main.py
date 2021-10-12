@@ -3,6 +3,7 @@ import sys
 import time
 import argparse
 import os.path as osp
+import numpy
 import torch
 import torch.nn.functional as F
 from tqdm import *
@@ -138,6 +139,7 @@ l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPoint
 # print("build over")
 l1_back_input_prop.partSize = int(l1_back_info[0].item())
 l1_back_input_prop.numParts = int(l1_back_info[1].item())
+# l1_back_input_prop.reorder(num_nodes)
 
 l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
     GNNA.build_back_part(dataset.l2b_edge_mask, inputInfo.column_index, dataset.l2b_node_deg, dataset.l2_valid_node, args.l2_backsize)
@@ -146,6 +148,7 @@ l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPoint
 # print(l2_back_info)
 l2_back_input_prop.partSize = int(l2_back_info[0].item())
 l2_back_input_prop.numParts = int(l2_back_info[1].item())
+# l2_back_input_prop.reorder(num_nodes)
 # print("build back part.")
 
 ####################################

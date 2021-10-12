@@ -289,7 +289,66 @@ torch::Tensor rabbit_reorder(
   return out_edge_index;
 }
 
+torch::Tensor back_rabbit_reorder(
+    torch::Tensor in_edge_index
+) {
+  int src, dst;
+
+  using boost::adaptors::transformed;
+  std::cerr << "Number of threads: " << omp_get_max_threads() << std::endl;
+
+  CHECK_INPUT(in_edge_index);
+
+  const int numedges = in_edge_index.size(0);
+  // const int dim0 = in_edge_index.size(1);
+  // vint is size_t 
+  std::vector<std::tuple<vint, vint, float>> edges;
+  auto in_edge_index_ptr = in_edge_index.accessor<int, 2>();
+  // prepare the input
+  for(int i = 0; i < numedges; i++){
+    src = in_edge_index_ptr[i][0];
+    dst = in_edge_index_ptr[i][1];
+    edges.push_back(std::make_tuple(src, dst, 1.0f));
+  }
+
+  // output edge index.
+  // printf("dim0: %d, numedges: %d\n", dim0, numedges);
+  torch::Tensor out_edge_index = torch::zeros_like(in_edge_index);
+  auto out_edge_index_ptr = out_edge_index.accessor<int, 2>();
+  // for(int i = 0; i < numedges; i++){
+  //   src = std::get<0>(edges[i]);
+  //   dst = std::get<1>(edges[i]);
+  //   out_edge_index_ptr[0][i] = src;
+  //   out_edge_index_ptr[1][i] = dst;
+  // }
+
+  // // get the mapping from raddit.
+  // auto adj = read_graph_from_edges(edges);
+  auto adj = read_graph_from_edges(edges);
+  const auto m   = boost::accumulate(adj | transformed([](auto& es) {return es.size();}), static_cast<size_t>(0));
+  std::cerr << "Number of vertices: " << adj.size() << std::endl;
+  std::cerr << "Number of edges: "    << m          << std::endl;
+  auto mapping = reorder(std::move(adj));
+
+  // for(auto it = mapping.cbegin(); it != mapping.cend(); ++it)
+  // {
+  //     std::cout << it->first << " " << it->second << "\n";
+  // }
+
+  // generate the edge_list.
+  for(int i = 0; i < numedges; i++){
+    src = std::get<0>(edges[i]);
+    out_edge_index_ptr[i][0] = mapping[src];
+    out_edge_index_ptr[i][1] = in_edge_index_ptr[i][1];
+    out_edge_index_ptr[i][2] = in_edge_index_ptr[i][2];
+  }
+
+  return out_edge_index;
+}
+
+
 // binding to python
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("reorder", &rabbit_reorder, "Get the reordered node id mapping: old_id --> new_id");
+  m.def("back_reorder", &back_rabbit_reorder, "Get the reordered node id mapping: old_id --> new_id");
 }
