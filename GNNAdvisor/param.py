@@ -3,6 +3,26 @@ import torch
 import rabbit
 import numpy
 
+def getBlockSize(dim):
+    blockx = 32
+    blocky = 2
+    if dim < 8:
+        blockx = 2
+        blocky = 32
+    elif dim >= 8 and dim < 32:
+        blockx = 4
+        blocky = 16
+    elif dim >= 32 and dim < 96:
+        blockx = 8
+        blocky = 8
+    elif dim >= 96 and dim < 192:
+        blockx = 16
+        blocky = 4
+    elif dim >= 192 and dim < 512:
+        blockx = 32
+        blocky = 2
+    return (blockx, blocky)
+
 # package of input parameters
 class inputProperty(object):
     def __init__(self, row_pointers=None, column_index=None, degrees=None,
@@ -73,7 +93,17 @@ class inputProperty(object):
                 print("\n=> MANUAL Config Complete !!!\n")
         else:
             # Determine the neighbor partitioning.
-            self.partSize = int(self.avgNodeDegree)
+            # self.partSize = int(self.avgNodeDegree)
+            if self.avgNodeDegree < 4:
+                self.partSize = 4
+            elif self.avgNodeDegree >= 4 and self.avgNodeDegree < 16:
+                self.partSize = 8
+            elif self.avgNodeDegree >= 16 and self.avgNodeDegree < 64:
+                self.partSize = 16
+            elif self.avgNodeDegree >= 64 and self.avgNodeDegree < 256:
+                self.partSize = 32
+            elif self.avgNodeDegree >= 256 and self.avgNodeDegree < 512:
+                self.partSize = 64
 
             est_shared = self.MAX_warpPerBlock * (self.partSize * 4 + self.inputDim * 4 + self.gap_smem * 4)/1e3
             if self.verbose_flag:
@@ -166,6 +196,15 @@ class inputProperty(object):
                     print("# auto HIDDEN warpPerBlock: {}".format(self.warpPerBlock))
                     print("# auto HIDDEN reorder_flag: {}".format(self.reorder_status))
 
+class maskInputProperty(object):
+    def __init__(self, src_mask=None, ngh_mask=None, backEdgeMask=None, node_degs=None, layer=None, dim=None):
+        self.src_mask = src_mask
+        self.ngh_mask = ngh_mask
+        self.backEdgeMask = backEdgeMask
+        self.node_degs = node_degs
+        self.layer = layer
+        self.blockx, self.blocky = getBlockSize(dim)
+        self.dim = dim
 
 class backInputProperty(object):
     def __init__(self, id=None, partPointer=None, edgeList=None, degrees=None,
@@ -178,21 +217,7 @@ class backInputProperty(object):
         self.numParts = numParts
         self.dim = dim
         self.layer = layer
-        if dim < 8:
-            self.blockx = 2
-            self.blocky = 32
-        elif dim >= 8 and dim < 32:
-            self.blockx = 4
-            self.blocky = 16
-        elif dim >= 32 and dim < 96:
-            self.blockx = 8
-            self.blocky = 8
-        elif dim >= 96 and dim < 192:
-            self.blockx = 16
-            self.blocky = 4
-        elif dim >= 192 and dim < 512:
-            self.blockx = 32
-            self.blocky = 2
+        self.blockx, self.blocky = getBlockSize(dim)
 
     def reorder(self, numNodes):
         partPointer = self.partPointer.to(torch.device('cpu'))

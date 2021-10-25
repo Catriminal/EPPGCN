@@ -42,6 +42,35 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     int warpPerBlock
   );
 
+std::vector<torch::Tensor> ours_forward_cuda(
+    torch::Tensor input,
+    torch::Tensor weight,
+    torch::Tensor id,
+    torch::Tensor partPointer,
+    torch::Tensor edgeList,
+    torch::Tensor degrees,
+    int partSize, 
+    int blockx, 
+    int blocky
+);
+
+std::vector<torch::Tensor> mask_forward_cuda(
+    torch::Tensor input,
+    torch::Tensor weight,
+    torch::Tensor id,
+    torch::Tensor partPointer,
+    torch::Tensor edgeList,
+    torch::Tensor degrees,
+    torch::Tensor src_mask,
+    torch::Tensor ngh_mask,
+    torch::Tensor backEdgeMask,
+    torch::Tensor node_degs,
+    int partSize, 
+    int layer,
+    int blockx, 
+    int blocky
+);
+
 std::vector<torch::Tensor> ours_backward_cuda(
     torch::Tensor d_output,
     torch::Tensor X,
@@ -61,6 +90,7 @@ void exclusive_scan(int *part_count, int *part_pointer, int num_parts);
 
 int compact_mask(int *d_input_id, int *d_output_id, int *d_input_edge, int *d_output_edge, int length, int blockSize);
 int compact_part(int *d_input, int *d_output, int length, int blockSize, int partSize);
+int compact_count(int *d_input, int length, int blockSize);
 
 void print_time();
 void clear_time();
@@ -174,6 +204,60 @@ std::vector<torch::Tensor> spmm_backward(
                             partSize, dimWorker, warpPerBlock);
 }
 
+std::vector<torch::Tensor> ours_forward(
+    torch::Tensor input,
+    torch::Tensor weight,
+    torch::Tensor id,
+    torch::Tensor partPointer,
+    torch::Tensor edgeList,
+    torch::Tensor degrees,
+    int partSize, 
+    int blockx, 
+    int blocky
+  ) {
+  CHECK_INPUT(input);
+  CHECK_INPUT(weight);
+  CHECK_INPUT(id);
+  CHECK_INPUT(partPointer);
+  CHECK_INPUT(edgeList);
+  CHECK_INPUT(degrees);
+
+  return ours_forward_cuda(input, weight, id, partPointer, 
+                            edgeList, degrees, partSize, blockx, blocky);
+}
+
+std::vector<torch::Tensor> mask_forward(
+    torch::Tensor input,
+    torch::Tensor weight,
+    torch::Tensor id,
+    torch::Tensor partPointer,
+    torch::Tensor edgeList,
+    torch::Tensor degrees,
+    torch::Tensor src_mask,
+    torch::Tensor ngh_mask,
+    torch::Tensor backEdgeMask,
+    torch::Tensor node_degs,
+    int partSize, 
+    int layer,
+    int blockx, 
+    int blocky
+  ) {
+  CHECK_INPUT(input);
+  CHECK_INPUT(weight);
+  CHECK_INPUT(id);
+  CHECK_INPUT(partPointer);
+  CHECK_INPUT(edgeList);
+  CHECK_INPUT(degrees);
+  CHECK_INPUT(src_mask);
+  CHECK_INPUT(ngh_mask);
+  CHECK_INPUT(backEdgeMask);
+  CHECK_INPUT(node_degs);
+
+  return mask_forward_cuda(input, weight, id, partPointer, 
+                            edgeList, degrees, src_mask, ngh_mask, 
+                            backEdgeMask, node_degs, partSize,
+                            layer, blockx, blocky);
+}
 
 std::vector<torch::Tensor> ours_backward(
     torch::Tensor d_output,
@@ -308,7 +392,6 @@ std::vector<torch::Tensor> build_back_part(
     torch::Tensor edge_mask,
     torch::Tensor column_index,
     torch::Tensor node_deg,
-    int valid_node,
     int back_part_size
   ) {
   int num_nodes = node_deg.size(0);
@@ -321,6 +404,7 @@ std::vector<torch::Tensor> build_back_part(
   // std::cout << "mask after " << valid_len << std::endl;
   if(back_part_size == 0) {
     // if(model_input == "") {
+      int valid_node = compact_count(node_deg.data_ptr<int>(), num_nodes, 1024);
       int valid_degree = valid_len / valid_node;
       if(valid_degree < 4) {
         back_part_size = 4;
@@ -366,6 +450,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
   m.def("forward", &spmm_forward, "GNNAdvisor forward (CUDA)");
   m.def("backward", &spmm_backward, "GNNAdvisor backward (CUDA)");
+  m.def("ours_forward", &ours_forward, "ours forward (CUDA)");
+  m.def("mask_forward", &mask_forward, "mask forward (CUDA)");
   m.def("ours_backward", &ours_backward, "ours backward (CUDA)");
   m.def("print_time", &print_time, "print time");
   m.def("clear_time", &clear_time, "clear time");

@@ -620,6 +620,65 @@ namespace cuCompactor_part
 
 } /* namespace cuCompactor */
 
+namespace cuCompactor_count {
+	
+#define warpSize (32)
+#define FULL_MASK 0xffffffff
+
+	__host__ __device__ int divup(int x, int y)
+	{
+		return x / y + (x % y ? 1 : 0);
+	}
+
+	__device__ __inline__ int pow2i(int e)
+	{
+		return 1 << e;
+	}
+
+	template <typename T>
+	__global__ void computeBlockCounts(T *d_input, int length, int *d_BlockCounts)
+	{
+		int idx = threadIdx.x + blockIdx.x * blockDim.x;
+		if (idx < length)
+		{
+			int pred = d_input[idx] != 0;
+			int BC = __syncthreads_count(pred);
+
+			if (threadIdx.x == 0)
+			{
+				d_BlockCounts[blockIdx.x] = BC; // BC will contain the number of valid elements in all threads of this thread block
+			}
+		}
+	}
+
+	template <typename T>
+	int compact(T *d_input, int length, int blockSize)
+	{
+		int numBlocks = divup(length, blockSize);
+		int *d_BlocksCount;
+		int *d_BlocksOffset;
+		CUDASAFECALL(cudaMalloc(&d_BlocksCount, sizeof(int) * numBlocks));
+		CUDASAFECALL(cudaMalloc(&d_BlocksOffset, sizeof(int) * numBlocks));
+		thrust::device_ptr<int> thrustPrt_bCount(d_BlocksCount);
+		thrust::device_ptr<int> thrustPrt_bOffset(d_BlocksOffset);
+
+		//phase 1: count number of valid elements in each thread block
+		computeBlockCounts<<<numBlocks, blockSize>>>(d_input, length, d_BlocksCount);
+		CUDASAFECALL(cudaDeviceSynchronize());
+		//phase 2: compute exclusive prefix sum of valid block counts to get output offset for each thread block in grid
+		thrust::exclusive_scan(thrustPrt_bCount, thrustPrt_bCount + numBlocks, thrustPrt_bOffset);
+
+		// determine number of elements in the compacted list
+		int compact_length = thrustPrt_bOffset[numBlocks - 1] + thrustPrt_bCount[numBlocks - 1];
+
+		cudaFree(d_BlocksCount);
+		cudaFree(d_BlocksOffset);
+
+		return compact_length;
+	}
+
+}
+
 int compact_mask(int *d_input_id, int *d_output_id, int *d_input_edge, int *d_output_edge, int length, int blockSize) {
 	int re = cuCompactor_mask::compact(d_input_id, d_output_id, d_input_edge, d_output_edge, length, blockSize); 
 	// print_d(d_output_edge, re, re, "edgelist: ");
@@ -630,6 +689,10 @@ int compact_part(int *d_input, int *d_output, int length, int blockSize, int par
 	int re = cuCompactor_part::compact(d_input, d_output, length, blockSize, partSize);
 	// print_d(d_output, re, re, "partCount: ");
 	return re;
+}
+
+int compact_count(int *d_input, int length, int blockSize) {
+	return cuCompactor_count::compact(d_input, length, blockSize);
 }
 
 #endif /* CUCOMPACTOR_H_ */

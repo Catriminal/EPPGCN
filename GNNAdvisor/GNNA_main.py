@@ -122,34 +122,13 @@ inputInfo.column_index  = inputInfo.column_index.to(device)
 inputInfo.partPtr = partPtr.int().to(device)
 inputInfo.part2Node  = part2Node.int().to(device)
 
+l1_mask_input_prop = maskInputProperty(dataset.train_mask, dataset.ngh_mask, dataset.l2_edge_mask,
+                                    dataset.l2_node_degs, 1, args.hidden)
+l2_mask_input_prop = maskInputProperty(dataset.ngh_mask, dataset.empty_mask, dataset.l1_edge_mask, dataset.l1_node_degs,
+                                    2, dataset.num_classes)
+
 l1_back_input_prop = backInputProperty(degrees=degrees, dim=args.hidden, layer=1)
 l2_back_input_prop = backInputProperty(degrees=degrees, dim=dataset.num_classes, layer=2)
-
-# l1_model_input = ""
-# l2_model_input = ""
-# if args.backsize_model == "net":
-#     l1_model_input = args.dataset + "_b1" if args.train_ratio == 0 else args.dataset + "_b1_" + str(args.train_ratio)
-#     l2_model_input = args.dataset + "_b2" if args.train_ratio == 0 else args.dataset + "_b2_" + str(args.train_ratio)
-
-# print(l1_model_input)
-# print(l2_model_input)
-
-l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPointer, l1_back_info = \
-    GNNA.build_back_part(dataset.l1b_edge_mask, inputInfo.column_index, dataset.l1b_node_deg, dataset.l1_valid_node, args.l1_backsize)
-# print("build over")
-l1_back_input_prop.partSize = int(l1_back_info[0].item())
-l1_back_input_prop.numParts = int(l1_back_info[1].item())
-# l1_back_input_prop.reorder(num_nodes)
-
-l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
-    GNNA.build_back_part(dataset.l2b_edge_mask, inputInfo.column_index, dataset.l2b_node_deg, dataset.l2_valid_node, args.l2_backsize)
-# print(l2_back_input_prop.partPointer)
-# print(l2_back_input_prop.partPointer.size(0))
-# print(l2_back_info)
-l2_back_input_prop.partSize = int(l2_back_info[0].item())
-l2_back_input_prop.numParts = int(l2_back_info[1].item())
-# l2_back_input_prop.reorder(num_nodes)
-# print("build back part.")
 
 ####################################
 # Verifing a single SpMM kernel
@@ -194,10 +173,10 @@ if args.model == 'gcn':
         def clear_time(self):
             self.conv1.clear_time()
 
-        def forward(self):
+        def forward(self, isFirstIter):
             x = dataset.x
-            x = F.relu(self.conv1(x, inputInfo.set_input(), l1_back_input_prop))
-            x = self.conv2(x, inputInfo.set_hidden(), l2_back_input_prop)
+            x = F.relu(self.conv1(x, inputInfo.set_input(), l1_mask_input_prop, l1_back_input_prop, isFirstIter))
+            x = self.conv2(x, inputInfo.set_hidden(), l2_mask_input_prop, l2_back_input_prop, isFirstIter)
             return x
 else:
     class Net(torch.nn.Module):
@@ -229,18 +208,46 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 ####################################
 
 
+def getValidNode(node_degs):
+    valid_node = 0
+    for id in range(dataset.num_nodes):
+        valid_node += 1 if node_degs[id] != 0 else 0
+    return valid_node
+
+def buildBackPart():
+
+    l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPointer, l1_back_info = \
+        GNNA.build_back_part(dataset.l1_edge_mask, inputInfo.column_index, dataset.l1_node_degs, args.l1_backsize)
+
+    l1_back_input_prop.partSize = int(l1_back_info[0].item())
+    l1_back_input_prop.numParts = int(l1_back_info[1].item())
+    print(l1_back_input_prop.numParts)
+    # l1_back_input_prop.reorder(num_nodes)
+
+    l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
+        GNNA.build_back_part(dataset.l2_edge_mask, inputInfo.column_index, dataset.l2_node_degs, args.l2_backsize)
+
+    l2_back_input_prop.partSize = int(l2_back_info[0].item())
+    l2_back_input_prop.numParts = int(l2_back_info[1].item())
+    print(l2_back_input_prop.numParts)
+    # l2_back_input_prop.reorder(num_nodes)
+    # print("build back part.")
+
 for_time = 0.0
 loss_time = 0.0
 back_time = 0.0
 other_time = 0.0
+build_time = 0.0
 
-def train():
+def train(isFirstIter):
     global for_time
     global loss_time
     global back_time
+    global build_time
     # global other_time
     # torch.cuda.synchronize()
     # start = time.perf_counter()
+
     model.train()
     optimizer.zero_grad()
     # torch.cuda.synchronize()
@@ -248,9 +255,14 @@ def train():
 
     # torch.cuda.synchronize()
     start = time.perf_counter()
-    x = model()
+    x = model(isFirstIter)
     torch.cuda.synchronize()
     for_time += time.perf_counter() - start
+
+    if(isFirstIter):
+        start = time.perf_counter()
+        buildBackPart()
+        build_time = time.perf_counter() - start
 
     # torch.cuda.synchronize()
     start = time.perf_counter()
@@ -274,8 +286,8 @@ def train():
 if __name__ == '__main__':
     # dry run
 
-    for _ in range(10):
-        train()
+    for i in range(10):
+        train(i == 0)
     # exit(0)
     for_time = 0.0
     loss_time = 0.0
@@ -286,13 +298,14 @@ if __name__ == '__main__':
     start_train = time.perf_counter()
     for _ in range(1, args.num_epoches + 1):
     # for _ in tqdm(range(1, args.num_epoches + 1)):
-        train()
+        train(False)
     torch.cuda.synchronize()
-    train_time = time.perf_counter() - start_train
+    total_time = time.perf_counter() - start_train
     model.print_time()
     print('for_time: {:.6f}'.format(for_time))
     print('loss_time: {:.6f}'.format(loss_time))
     print('back_time: {:.6f}'.format(back_time))
-    print('Time: {:.6f}'.format(train_time))
-    # print('Time (ms): {:.3f}'.format(train_time*1e3/args.num_epoches))
+    print('build_time: {:.6f}'.format(build_time))
+    print('Time: {:.6f}'.format(total_time))
+    # print('Time (ms): {:.3f}'.format(total_time*1e3/args.num_epoches))
     print()
