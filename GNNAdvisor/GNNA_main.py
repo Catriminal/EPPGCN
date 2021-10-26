@@ -207,13 +207,6 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 # Define training function.
 ####################################
 
-
-def getValidNode(node_degs):
-    valid_node = 0
-    for id in range(dataset.num_nodes):
-        valid_node += 1 if node_degs[id] != 0 else 0
-    return valid_node
-
 def buildBackPart():
 
     l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPointer, l1_back_info = \
@@ -221,16 +214,14 @@ def buildBackPart():
 
     l1_back_input_prop.partSize = int(l1_back_info[0].item())
     l1_back_input_prop.numParts = int(l1_back_info[1].item())
-    print(l1_back_input_prop.numParts)
-    # l1_back_input_prop.reorder(num_nodes)
+    l1_back_input_prop.reorder(num_nodes)
 
     l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
         GNNA.build_back_part(dataset.l2_edge_mask, inputInfo.column_index, dataset.l2_node_degs, args.l2_backsize)
 
     l2_back_input_prop.partSize = int(l2_back_info[0].item())
     l2_back_input_prop.numParts = int(l2_back_info[1].item())
-    print(l2_back_input_prop.numParts)
-    # l2_back_input_prop.reorder(num_nodes)
+    l2_back_input_prop.reorder(num_nodes)
     # print("build back part.")
 
 for_time = 0.0

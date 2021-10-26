@@ -1,6 +1,7 @@
 import math 
 import torch
 import rabbit
+import time
 import numpy
 
 def getBlockSize(dim):
@@ -220,40 +221,58 @@ class backInputProperty(object):
         self.blockx, self.blocky = getBlockSize(dim)
 
     def reorder(self, numNodes):
+        trans_time = 0.0
+        trans_start = time.perf_counter()
         partPointer = self.partPointer.to(torch.device('cpu'))
         edgeList = self.edgeList.to(torch.device('cpu'))
         ids = self.id.to(torch.device('cpu'))
+        trans_time += time.perf_counter() - trans_start
+
+        partCount_start = time.perf_counter()
         partCount = (partPointer[1:] - partPointer[:-1]).tolist()
+        partCount_time = time.perf_counter() - partCount_start
         partSize = self.partSize
         numParts = self.numParts
 
+        partNumCount_start = time.perf_counter()
         partNumCount = [0] * (partSize + 1)
         partNumPos = [0] * (partSize + 1)
         for idx in range(numParts):
             cnt = partCount[idx]
             partNumCount[cnt] += 1
+        partNumCount_time = time.perf_counter() - partNumCount_start
         print(partNumCount[0])
         partNumCount[0] = 0 # clear the part num whose part count is 0.
 
+        partNumPos_start = time.perf_counter()
         for idx in range(1, len(partNumCount)):
             partNumCount[idx] = partNumCount[idx] + partNumCount[idx - 1]
             partNumPos[idx] = partNumCount[idx]
+        partNumPos_time = time.perf_counter() - partNumPos_start
         
+        sorted_start = time.perf_counter()
         sorted_partMap = [0] * partNumCount[-1]
         for idx in range(numParts):
             cnt = partCount[idx] - 1
             if cnt == -1:
                 continue
 
-            if cnt >= partSize:
-                print("cnt error: %d %d" % (cnt, partSize))
-                exit(-1)
-            if partNumPos[cnt] >= numParts:
-                print("pos error: %d %d" % (partNumPos[cnt], numParts))
-                exit(-1)
+            # if cnt >= partSize:
+            #     print("cnt error: %d %d" % (cnt, partSize))
+            #     exit(-1)
+            # if partNumPos[cnt] >= numParts:
+            #     print("pos error: %d %d" % (partNumPos[cnt], numParts))
+            #     exit(-1)
             sorted_partMap[partNumPos[cnt]] = idx
             partNumPos[cnt] += 1
+        sorted_time = time.perf_counter() - sorted_start
 
+        edge_time = 0.0
+        rabbit_time = 0.0
+        edgeSort_time = 0.0
+        newEdgeList_time = 0.0
+        newPartPointer_time = 0.0
+        reorder_start = time.perf_counter()
         new_partPointer = []
         new_partPointer.append(0)
         new_edgeList = []
@@ -268,6 +287,7 @@ class backInputProperty(object):
                 continue
             edges = []
             localPartNum = 0
+            edge_start = time.perf_counter()
             for pos in range(startNumOff, endNumOff):
                 partID = sorted_partMap[pos]
                 partLen = partPointer[partID + 1] - partPointer[partID]
@@ -278,11 +298,18 @@ class backInputProperty(object):
                     edge = [numNodes + localPartNum, dst, id]
                     edges.append(edge)
                 localPartNum += 1
+            edge_time += time.perf_counter() - edge_start
             
+            rabbit_start = time.perf_counter()
             edges = rabbit.back_reorder(torch.IntTensor(edges))
+            rabbit_time += time.perf_counter() - rabbit_start
+
+            edgeSort_start = time.perf_counter()
             edges = edges.numpy().tolist()
             edges.sort(key=lambda x : (x[0], x[1]))
+            edgeSort_time += time.perf_counter() - edgeSort_start
 
+            newEdgeList_start = time.perf_counter()
             last = edges[0][0]
             count = 0
             localPartCount = []
@@ -297,13 +324,32 @@ class backInputProperty(object):
                 new_edgeList.append(edge[1])
                 new_id.append(edge[2])
             localPartCount.append(count)
+            newEdgeList_time += time.perf_counter() - newEdgeList_start
 
+            newPartPointer_start = time.perf_counter()
             for count in localPartCount:
                 new_partPointer.append(new_partPointer[-1] + count)
+            newPartPointer_time += time.perf_counter() - newPartPointer_start
+        reorder_time = time.perf_counter() - reorder_start
 
+        trans_start = time.perf_counter()
         self.partPointer = torch.IntTensor(new_partPointer).to(torch.device('cuda'))
         self.edgeList = torch.IntTensor(new_edgeList).to(torch.device('cuda'))
         self.id = torch.IntTensor(new_id).to(torch.device('cuda'))
+        trans_time = time.perf_counter() - trans_start
         self.numParts = partNumCount[-1]
+        print("===================================================")
+        print("trans_time: {:.6f}".format(trans_time))
+        print("partCount_time: {:.6f}".format(partCount_time))
+        print("partNumCount_time: {:.6f}".format(partNumCount_time))
+        print("partNumPos_time: {:.6f}".format(partNumPos_time))
+        print("sorted_time: {:.6f}".format(sorted_time))
+        print("edge_time: {:.6f}".format(edge_time))
+        print("rabbit_time: {:.6f}".format(rabbit_time))
+        print("edgeSort_time: {:.6f}".format(edgeSort_time))
+        print("newEdgeList_time: {:.6f}".format(newEdgeList_time))
+        print("newPartPointer_time: {:.6f}".format(newPartPointer_time))
+        print("reorder_time: {:.6f}".format(reorder_time))
+        print("===================================================")
 
         
