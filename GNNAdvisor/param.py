@@ -286,23 +286,28 @@ class backInputProperty(object):
             if endNumOff == startNumOff:
                 continue
             edges = []
-            localPartNum = 0
+            
             edge_start = time.perf_counter()
-            for pos in range(startNumOff, endNumOff):
-                partID = sorted_partMap[pos]
-                partLen = partPointer[partID + 1] - partPointer[partID]
-                partStart = partPointer[partID]
-                id = int(ids[partStart])
-                for off in range(partLen):
-                    dst = int(edgeList[partStart + off])
-                    edge = [numNodes + localPartNum, dst, id]
-                    edges.append(edge)
-                localPartNum += 1
+
+            edges = rabbit.test_reorder(torch.IntTensor(sorted_partMap), partPointer, ids, edgeList,
+                                        numNodes, startNumOff, endNumOff)
+
+            # localPartNum = 0
+            # for pos in range(startNumOff, endNumOff):
+            #     partID = sorted_partMap[pos]
+            #     partLen = partPointer[partID + 1] - partPointer[partID]
+            #     partStart = partPointer[partID]
+            #     id = int(ids[partStart])
+            #     for off in range(partLen):
+            #         dst = int(edgeList[partStart + off])
+            #         edge = [numNodes + localPartNum, dst, id]
+            #         edges.append(edge)
+            #     localPartNum += 1
             edge_time += time.perf_counter() - edge_start
             
-            rabbit_start = time.perf_counter()
-            edges = rabbit.back_reorder(torch.IntTensor(edges))
-            rabbit_time += time.perf_counter() - rabbit_start
+            # rabbit_start = time.perf_counter()
+            # edges = rabbit.back_reorder(torch.IntTensor(edges))
+            # rabbit_time += time.perf_counter() - rabbit_start
 
             edgeSort_start = time.perf_counter()
             edges = edges.numpy().tolist()

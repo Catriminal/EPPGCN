@@ -346,9 +346,77 @@ torch::Tensor back_rabbit_reorder(
   return out_edge_index;
 }
 
+torch::Tensor test_reorder(
+  torch::Tensor sorted_partMap,
+  torch::Tensor partPointer,
+  torch::Tensor ids,
+  torch::Tensor edgeList,
+  int num_nodes,
+  int startNumOff,
+  int endNumOff
+) {
+  using boost::adaptors::transformed;
+  std::cerr << "Number of threads: " << omp_get_max_threads() << std::endl;
+
+  CHECK_INPUT(sorted_partMap);
+  CHECK_INPUT(partPointer);
+  CHECK_INPUT(ids);
+  CHECK_INPUT(edgeList);
+
+  auto sorted_partMap_acc = sorted_partMap.accessor<int, 1>();
+  auto partPointer_acc = partPointer.accessor<int, 1>();
+  auto ids_acc = ids.accessor<int, 1>();
+  auto edgeList_acc = edgeList.accessor<int, 1>();
+
+  int partNum = endNumOff - startNumOff;
+  std::vector<int> edgeCount(partNum + 1, 0);
+  #pragma omp parallel for
+  for(int i = 0; i < partNum; i++) {
+    int partID = sorted_partMap_acc[i + startNumOff];
+    edgeCount[i + 1] = partPointer_acc[partID + 1] - partPointer_acc[partID];
+  }
+
+  for(int i = 1; i <= partNum; i++) {
+    edgeCount[i] = edgeCount[i] + edgeCount[i - 1];
+  }
+
+  int num_edges = edgeCount[partNum];
+  std::vector<std::tuple<vint, vint, float>> graph_edges(num_edges);
+  auto output = torch::zeros({num_edges, 3}).to(torch::kInt);
+  auto output_acc = output.accessor<int, 2>();
+
+  #pragma omp parallel for
+  for(int i = 0; i < partNum; i++) {
+    int partID = sorted_partMap_acc[i + startNumOff];
+    int partLen = partPointer_acc[partID + 1] - partPointer_acc[partID];
+    int partStart = partPointer_acc[partID];
+    int id = ids_acc[partStart];
+    for(int j = 0; j < partLen; j++) {
+      int dst = edgeList_acc[partStart + j];
+      output_acc[edgeCount[i] + j][0] = num_nodes + i;
+      output_acc[edgeCount[i] + j][1] = dst;
+      output_acc[edgeCount[i] + j][2] = id;
+      graph_edges[edgeCount[i] + j] = std::make_tuple(num_nodes + i, dst, 1.0f);
+    }
+  }
+
+  auto adj = read_graph_from_edges(graph_edges);
+  const auto m   = boost::accumulate(adj | transformed([](auto& es) {return es.size();}), static_cast<size_t>(0));
+  std::cerr << "Number of vertices: " << adj.size() << std::endl;
+  std::cerr << "Number of edges: "    << m          << std::endl;
+  auto mapping = reorder(std::move(adj)); 
+  
+  #pragma omp parallel for
+  for(int i = 0; i < num_edges; i++){
+    output_acc[i][0] = mapping[output_acc[i][0]];
+  }
+
+  return output;
+}
 
 // binding to python
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("reorder", &rabbit_reorder, "Get the reordered node id mapping: old_id --> new_id");
   m.def("back_reorder", &back_rabbit_reorder, "Get the reordered node id mapping: old_id --> new_id");
+  m.def("test_reorder", &test_reorder, "Get the reordered node id mapping: old_id --> new_id");
 }
