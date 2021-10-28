@@ -273,10 +273,12 @@ class backInputProperty(object):
         newEdgeList_time = 0.0
         newPartPointer_time = 0.0
         reorder_start = time.perf_counter()
-        new_partPointer = []
-        new_partPointer.append(0)
-        new_edgeList = []
-        new_id = []
+
+        newPartPointer = torch.zeros_like(partPointer)
+        newEdgelist = torch.zeros_like(edgeList)
+        newId = torch.zeros_like(ids)
+
+        partPointerStart = 0
         interval = int(partSize / 2)
         for idx in range(1, partSize + 1, interval):
             startSize = idx
@@ -285,62 +287,20 @@ class backInputProperty(object):
             endNumOff = partNumCount[endSize - 1]
             if endNumOff == startNumOff:
                 continue
-            edges = []
             
             edge_start = time.perf_counter()
 
-            edges = rabbit.test_reorder(torch.IntTensor(sorted_partMap), partPointer, ids, edgeList,
-                                        numNodes, startNumOff, endNumOff)
-
-            # localPartNum = 0
-            # for pos in range(startNumOff, endNumOff):
-            #     partID = sorted_partMap[pos]
-            #     partLen = partPointer[partID + 1] - partPointer[partID]
-            #     partStart = partPointer[partID]
-            #     id = int(ids[partStart])
-            #     for off in range(partLen):
-            #         dst = int(edgeList[partStart + off])
-            #         edge = [numNodes + localPartNum, dst, id]
-            #         edges.append(edge)
-            #     localPartNum += 1
-            edge_time += time.perf_counter() - edge_start
+            partPointerStart = rabbit.test_reorder(torch.IntTensor(sorted_partMap), partPointer, ids, edgeList,
+                                                   newPartPointer, newEdgelist, newId, partPointerStart, numNodes, startNumOff, endNumOff)
             
-            # rabbit_start = time.perf_counter()
-            # edges = rabbit.back_reorder(torch.IntTensor(edges))
-            # rabbit_time += time.perf_counter() - rabbit_start
+            edge_time += time.perf_counter() - edge_start
 
-            edgeSort_start = time.perf_counter()
-            edges = edges.numpy().tolist()
-            edges.sort(key=lambda x : (x[0], x[1]))
-            edgeSort_time += time.perf_counter() - edgeSort_start
-
-            newEdgeList_start = time.perf_counter()
-            last = edges[0][0]
-            count = 0
-            localPartCount = []
-            for edge in edges:
-                if edge[0] != last:
-                    localPartCount.append(count)
-                    count = 1
-                    last = edge[0]
-                else:
-                    count += 1
-
-                new_edgeList.append(edge[1])
-                new_id.append(edge[2])
-            localPartCount.append(count)
-            newEdgeList_time += time.perf_counter() - newEdgeList_start
-
-            newPartPointer_start = time.perf_counter()
-            for count in localPartCount:
-                new_partPointer.append(new_partPointer[-1] + count)
-            newPartPointer_time += time.perf_counter() - newPartPointer_start
         reorder_time = time.perf_counter() - reorder_start
 
         trans_start = time.perf_counter()
-        self.partPointer = torch.IntTensor(new_partPointer).to(torch.device('cuda'))
-        self.edgeList = torch.IntTensor(new_edgeList).to(torch.device('cuda'))
-        self.id = torch.IntTensor(new_id).to(torch.device('cuda'))
+        self.partPointer = newPartPointer.to(torch.device('cuda'))
+        self.edgeList = newEdgelist.to(torch.device('cuda'))
+        self.id = newId.to(torch.device('cuda'))
         trans_time = time.perf_counter() - trans_start
         self.numParts = partNumCount[-1]
         print("===================================================")
@@ -355,6 +315,7 @@ class backInputProperty(object):
         print("newEdgeList_time: {:.6f}".format(newEdgeList_time))
         print("newPartPointer_time: {:.6f}".format(newPartPointer_time))
         print("reorder_time: {:.6f}".format(reorder_time))
+        print("%d == %d" % (self.numParts, partPointerStart))
         print("===================================================")
 
         

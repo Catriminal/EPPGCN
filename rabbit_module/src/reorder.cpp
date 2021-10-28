@@ -346,11 +346,15 @@ torch::Tensor back_rabbit_reorder(
   return out_edge_index;
 }
 
-torch::Tensor test_reorder(
+int test_reorder(
   torch::Tensor sorted_partMap,
   torch::Tensor partPointer,
   torch::Tensor ids,
   torch::Tensor edgeList,
+  torch::Tensor newPartPointer,
+  torch::Tensor newEdgeList,
+  torch::Tensor newIds,
+  int partPointerStart,
   int num_nodes,
   int startNumOff,
   int endNumOff
@@ -362,11 +366,17 @@ torch::Tensor test_reorder(
   CHECK_INPUT(partPointer);
   CHECK_INPUT(ids);
   CHECK_INPUT(edgeList);
+  CHECK_INPUT(newPartPointer);
+  CHECK_INPUT(newEdgeList);
+  CHECK_INPUT(newIds);
 
   auto sorted_partMap_acc = sorted_partMap.accessor<int, 1>();
   auto partPointer_acc = partPointer.accessor<int, 1>();
   auto ids_acc = ids.accessor<int, 1>();
   auto edgeList_acc = edgeList.accessor<int, 1>();
+  auto newPartPointer_acc = newPartPointer.accessor<int, 1>();
+  auto newIds_acc = newIds.accessor<int, 1>();
+  auto newEdgeList_acc = newEdgeList.accessor<int, 1>();
 
   int partNum = endNumOff - startNumOff;
   std::vector<int> edgeCount(partNum + 1, 0);
@@ -382,8 +392,7 @@ torch::Tensor test_reorder(
 
   int num_edges = edgeCount[partNum];
   std::vector<std::tuple<vint, vint, float>> graph_edges(num_edges);
-  auto output = torch::zeros({num_edges, 3}).to(torch::kInt);
-  auto output_acc = output.accessor<int, 2>();
+  std::vector<int> cnt2id(partNum, 0);
 
   #pragma omp parallel for
   for(int i = 0; i < partNum; i++) {
@@ -393,9 +402,7 @@ torch::Tensor test_reorder(
     int id = ids_acc[partStart];
     for(int j = 0; j < partLen; j++) {
       int dst = edgeList_acc[partStart + j];
-      output_acc[edgeCount[i] + j][0] = num_nodes + i;
-      output_acc[edgeCount[i] + j][1] = dst;
-      output_acc[edgeCount[i] + j][2] = id;
+      cnt2id[i] = partID; // new index need to minus num_nodes to get map index
       graph_edges[edgeCount[i] + j] = std::make_tuple(num_nodes + i, dst, 1.0f);
     }
   }
@@ -406,12 +413,44 @@ torch::Tensor test_reorder(
   std::cerr << "Number of edges: "    << m          << std::endl;
   auto mapping = reorder(std::move(adj)); 
   
+  std::vector<int> newid2cnt(num_nodes + partNum, 0);
+  std::vector<int> newids(partNum, 0);
   #pragma omp parallel for
-  for(int i = 0; i < num_edges; i++){
-    output_acc[i][0] = mapping[output_acc[i][0]];
+  for(int i = 0; i < partNum; i++) {
+    int newid = mapping[num_nodes + i];
+    newid2cnt[newid] = i;
+    newids[i] = newid;
   }
 
-  return output;
+  std::sort(newids.begin(), newids.end());
+  
+  #pragma omp parallel for
+  for(int i = 0; i < partNum; i++) {
+    int newid = newids[i];
+    int cnt = newid2cnt[newid];
+    int partid = cnt2id[cnt];
+    newPartPointer_acc[partPointerStart + i + 1] = partPointer_acc[partid + 1] - partPointer_acc[partid];
+  }
+
+  for(int i = 1; i <= partNum; i++) {
+    int idx = partPointerStart + i;
+    newPartPointer_acc[idx] = newPartPointer_acc[idx] + newPartPointer_acc[idx - 1];
+  }
+
+  #pragma omp parallel for
+  for(int i = 0; i < partNum; i++) {
+    int partid = cnt2id[newid2cnt[newids[i]]];
+    int partLen = partPointer_acc[partid + 1] - partPointer_acc[partid];
+    int partStart = partPointer_acc[partid];
+    int id = ids_acc[partStart];
+    int idx = partPointerStart + i;
+    for(int j = 0; j < partLen; j++) {
+      newEdgeList_acc[newPartPointer_acc[idx] + j] = edgeList_acc[partStart + j];
+      newIds_acc[newPartPointer_acc[idx] + j] = id;
+    }
+  }
+
+  return partPointerStart + partNum;
 }
 
 // binding to python
@@ -419,4 +458,4 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("reorder", &rabbit_reorder, "Get the reordered node id mapping: old_id --> new_id");
   m.def("back_reorder", &back_rabbit_reorder, "Get the reordered node id mapping: old_id --> new_id");
   m.def("test_reorder", &test_reorder, "Get the reordered node id mapping: old_id --> new_id");
-}
+} 
