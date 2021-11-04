@@ -117,6 +117,10 @@ build_neighbor_parts = time.perf_counter() - start
 if verbose_mode:
     print("# Build nb_part (s): {:.3f}".format(build_neighbor_parts))
 
+# inputInfo.partPtr = partPtr.int()
+# inputInfo.part2Node = part2Node.int()
+# inputInfo.reorder()
+
 inputInfo.row_pointers  = inputInfo.row_pointers.to(device)
 inputInfo.column_index  = inputInfo.column_index.to(device)
 inputInfo.partPtr = partPtr.int().to(device)
@@ -214,27 +218,25 @@ def buildBackPart():
 
     l1_back_input_prop.partSize = int(l1_back_info[0].item())
     l1_back_input_prop.numParts = int(l1_back_info[1].item())
-    l1_back_input_prop.reorder(num_nodes)
+    # l1_back_input_prop.reorder(num_nodes)
 
     l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
         GNNA.build_back_part(dataset.l2_edge_mask, inputInfo.column_index, dataset.l2_node_degs, args.l2_backsize)
 
     l2_back_input_prop.partSize = int(l2_back_info[0].item())
     l2_back_input_prop.numParts = int(l2_back_info[1].item())
-    l2_back_input_prop.reorder(num_nodes)
+    # l2_back_input_prop.reorder(num_nodes)
     # print("build back part.")
 
 for_time = 0.0
 loss_time = 0.0
 back_time = 0.0
 other_time = 0.0
-build_time = 0.0
 
 def train(isFirstIter):
     global for_time
     global loss_time
     global back_time
-    global build_time
     # global other_time
     # torch.cuda.synchronize()
     # start = time.perf_counter()
@@ -251,9 +253,7 @@ def train(isFirstIter):
     for_time += time.perf_counter() - start
 
     if(isFirstIter):
-        start = time.perf_counter()
         buildBackPart()
-        build_time = time.perf_counter() - start
 
     # torch.cuda.synchronize()
     start = time.perf_counter()
@@ -296,7 +296,6 @@ if __name__ == '__main__':
     print('for_time: {:.6f}'.format(for_time))
     print('loss_time: {:.6f}'.format(loss_time))
     print('back_time: {:.6f}'.format(back_time))
-    print('build_time: {:.6f}'.format(build_time))
     print('Time: {:.6f}'.format(total_time))
     # print('Time (ms): {:.3f}'.format(total_time*1e3/args.num_epoches))
     print()

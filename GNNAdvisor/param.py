@@ -24,6 +24,47 @@ def getBlockSize(dim):
         blocky = 2
     return (blockx, blocky)
 
+def reorder(partPointer, edgeList, ids, newPartPointer, newEdgeList, newId, partSize, numParts, numNodes, isFor):
+    partCount = (partPointer[1:] - partPointer[:-1]).tolist()
+
+    partNumCount = [0] * (partSize + 1)
+    partNumPos = [0] * (partSize + 1)
+    for idx in range(numParts):
+        cnt = partCount[idx]
+        partNumCount[cnt] += 1
+    partNumCount[0] = 0
+
+    for idx in range(1, len(partNumCount)):
+        partNumCount[idx] = partNumCount[idx] + partNumCount[idx - 1]
+        partNumPos[idx] = partNumCount[idx]
+    
+    sorted_partMap = [0] * partNumCount[-1]
+    for idx in range(numParts):
+        cnt = partCount[idx] - 1
+        if cnt == -1:
+            continue
+
+        sorted_partMap[partNumPos[cnt]] = idx
+        partNumPos[cnt] += 1
+
+    partPointerStart = 0
+    interval = int(partSize / 2)
+    for idx in range(1, partSize + 1, interval):
+        startSize = idx
+        endSize = min(idx + interval, partSize + 1)
+        startNumOff = partNumCount[startSize - 1]
+        endNumOff = partNumCount[endSize - 1]
+        if endNumOff == startNumOff:
+            continue
+
+        partPointerStart = rabbit.test_reorder(torch.IntTensor(sorted_partMap), partPointer, ids, edgeList,
+                                                newPartPointer, newEdgeList, newId, partPointerStart, numNodes, 
+                                                startNumOff, endNumOff, isFor)
+
+    return partNumCount[-1]
+
+
+
 # package of input parameters
 class inputProperty(object):
     def __init__(self, row_pointers=None, column_index=None, degrees=None,
@@ -72,6 +113,18 @@ class inputProperty(object):
         self.partPtr = None
         self.part2Node = None
 
+    def reorder(self):
+        newPartPointer = torch.zeros_like(self.partPtr)
+        newEdgeList = torch.zeros_like(self.column_index)
+        newIds = torch.zeros_like(self.part2Node)
+        # start = time.perf_counter()
+        reorder(self.partPtr, self.column_index, self.part2Node, newPartPointer, newEdgeList, newIds,
+                self.partSize, self.part2Node.size()[0], self.num_nodes, True)
+        # print('for_reorder: {:.6f}'.format(time.perf_counter() - start))
+        self.partPtr = newPartPointer
+        self.column_index = newEdgeList
+        self.part2Node = newIds
+        
     def decider(self):
         '''
         Determine the performance-related parameter here.
@@ -228,94 +281,18 @@ class backInputProperty(object):
         ids = self.id.to(torch.device('cpu'))
         trans_time += time.perf_counter() - trans_start
 
-        partCount_start = time.perf_counter()
-        partCount = (partPointer[1:] - partPointer[:-1]).tolist()
-        partCount_time = time.perf_counter() - partCount_start
-        partSize = self.partSize
-        numParts = self.numParts
-
-        partNumCount_start = time.perf_counter()
-        partNumCount = [0] * (partSize + 1)
-        partNumPos = [0] * (partSize + 1)
-        for idx in range(numParts):
-            cnt = partCount[idx]
-            partNumCount[cnt] += 1
-        partNumCount_time = time.perf_counter() - partNumCount_start
-        print(partNumCount[0])
-        partNumCount[0] = 0 # clear the part num whose part count is 0.
-
-        partNumPos_start = time.perf_counter()
-        for idx in range(1, len(partNumCount)):
-            partNumCount[idx] = partNumCount[idx] + partNumCount[idx - 1]
-            partNumPos[idx] = partNumCount[idx]
-        partNumPos_time = time.perf_counter() - partNumPos_start
-        
-        sorted_start = time.perf_counter()
-        sorted_partMap = [0] * partNumCount[-1]
-        for idx in range(numParts):
-            cnt = partCount[idx] - 1
-            if cnt == -1:
-                continue
-
-            # if cnt >= partSize:
-            #     print("cnt error: %d %d" % (cnt, partSize))
-            #     exit(-1)
-            # if partNumPos[cnt] >= numParts:
-            #     print("pos error: %d %d" % (partNumPos[cnt], numParts))
-            #     exit(-1)
-            sorted_partMap[partNumPos[cnt]] = idx
-            partNumPos[cnt] += 1
-        sorted_time = time.perf_counter() - sorted_start
-
-        edge_time = 0.0
-        rabbit_time = 0.0
-        edgeSort_time = 0.0
-        newEdgeList_time = 0.0
-        newPartPointer_time = 0.0
-        reorder_start = time.perf_counter()
-
         newPartPointer = torch.zeros_like(partPointer)
-        newEdgelist = torch.zeros_like(edgeList)
-        newId = torch.zeros_like(ids)
-
-        partPointerStart = 0
-        interval = int(partSize / 2)
-        for idx in range(1, partSize + 1, interval):
-            startSize = idx
-            endSize = min(idx + interval, partSize + 1)
-            startNumOff = partNumCount[startSize - 1]
-            endNumOff = partNumCount[endSize - 1]
-            if endNumOff == startNumOff:
-                continue
-            
-            edge_start = time.perf_counter()
-
-            partPointerStart = rabbit.test_reorder(torch.IntTensor(sorted_partMap), partPointer, ids, edgeList,
-                                                   newPartPointer, newEdgelist, newId, partPointerStart, numNodes, startNumOff, endNumOff)
-            
-            edge_time += time.perf_counter() - edge_start
-
-        reorder_time = time.perf_counter() - reorder_start
-
+        newEdgeList = torch.zeros_like(edgeList)
+        newIds = torch.zeros_like(ids)
+        # start = time.perf_counter()
+        numParts = reorder(partPointer, edgeList, ids, newPartPointer, newEdgeList, newIds, 
+                    self.partSize, self.numParts, numNodes, False)
+        # print('back_reorder: {:.6f}'.format(time.perf_counter() - start))
         trans_start = time.perf_counter()
         self.partPointer = newPartPointer.to(torch.device('cuda'))
-        self.edgeList = newEdgelist.to(torch.device('cuda'))
-        self.id = newId.to(torch.device('cuda'))
+        self.edgeList = newEdgeList.to(torch.device('cuda'))
+        self.id = newIds.to(torch.device('cuda'))
         trans_time = time.perf_counter() - trans_start
-        self.numParts = partNumCount[-1]
-        print("===================================================")
-        print("trans_time: {:.6f}".format(trans_time))
-        print("partCount_time: {:.6f}".format(partCount_time))
-        print("partNumCount_time: {:.6f}".format(partNumCount_time))
-        print("partNumPos_time: {:.6f}".format(partNumPos_time))
-        print("sorted_time: {:.6f}".format(sorted_time))
-        print("edge_time: {:.6f}".format(edge_time))
-        print("rabbit_time: {:.6f}".format(rabbit_time))
-        print("edgeSort_time: {:.6f}".format(edgeSort_time))
-        print("newEdgeList_time: {:.6f}".format(newEdgeList_time))
-        print("newPartPointer_time: {:.6f}".format(newPartPointer_time))
-        print("reorder_time: {:.6f}".format(reorder_time))
-        print("%d == %d" % (self.numParts, partPointerStart))
-        print("===================================================")
+        self.numParts = numParts
 
         

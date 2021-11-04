@@ -106,8 +106,8 @@ adjacency_list read_graph(const std::string& graphpath) {
           return std::max(s, std::max(std::get<0>(e), std::get<1>(e)) + 1);});
 
   if (const size_t c = count_unused_id(n, edges)) {
-    std::cerr << "WARNING: " << c << "/" << n << " vertex IDs are unused"
-              << " (zero-degree vertices or noncontiguous IDs?)\n";
+    // std::cerr << "WARNING: " << c << "/" << n << " vertex IDs are unused"
+    //           << " (zero-degree vertices or noncontiguous IDs?)\n";
   }
 
   return make_adj_list(n, edges);
@@ -123,8 +123,8 @@ adjacency_list read_graph_from_edges(const auto edges) {
           return std::max(s, std::max(std::get<0>(e), std::get<1>(e)) + 1);});
 
   if (const size_t c = count_unused_id(n, edges)) {
-    std::cerr << "WARNING: " << c << "/" << n << " vertex IDs are unused"
-              << " (zero-degree vertices or noncontiguous IDs?)\n";
+    // std::cerr << "WARNING: " << c << "/" << n << " vertex IDs are unused"
+    //           << " (zero-degree vertices or noncontiguous IDs?)\n";
   }
 
   return make_adj_list(n, edges);
@@ -208,15 +208,15 @@ void detect_community(adjacency_list adj) {
 
 // generate the mapping from old-idx --> new-idx
 std::map<int, int> reorder(adjacency_list adj) {
-  std::cerr << "Generating a permutation...\n";
+  // std::cerr << "Generating a permutation...\n";
   const double tstart = rabbit_order::now_sec();
   //--------------------------------------------
   const auto g = rabbit_order::aggregate(std::move(adj));
   // std::unique_ptr<vint[]> compute_perm(const graph& g) 
   const auto p = rabbit_order::compute_perm(g);
   //--------------------------------------------
-  std::cerr << "Runtime for permutation generation [sec]: "
-            << rabbit_order::now_sec() - tstart << std::endl;
+  // std::cerr << "Runtime for permutation generation [sec]: "
+  //           << rabbit_order::now_sec() - tstart << std::endl;
 
   // Print the result from (0, n)
   // std::copy(&p[0], &p[g.n()], std::ostream_iterator<vint>(std::cout, "\n"));
@@ -357,10 +357,11 @@ int test_reorder(
   int partPointerStart,
   int num_nodes,
   int startNumOff,
-  int endNumOff
+  int endNumOff,
+  bool isFor
 ) {
   using boost::adaptors::transformed;
-  std::cerr << "Number of threads: " << omp_get_max_threads() << std::endl;
+  // std::cerr << "Number of threads: " << omp_get_max_threads() << std::endl;
 
   CHECK_INPUT(sorted_partMap);
   CHECK_INPUT(partPointer);
@@ -399,7 +400,6 @@ int test_reorder(
     int partID = sorted_partMap_acc[i + startNumOff];
     int partLen = partPointer_acc[partID + 1] - partPointer_acc[partID];
     int partStart = partPointer_acc[partID];
-    int id = ids_acc[partStart];
     for(int j = 0; j < partLen; j++) {
       int dst = edgeList_acc[partStart + j];
       cnt2id[i] = partID; // new index need to minus num_nodes to get map index
@@ -409,8 +409,8 @@ int test_reorder(
 
   auto adj = read_graph_from_edges(graph_edges);
   const auto m   = boost::accumulate(adj | transformed([](auto& es) {return es.size();}), static_cast<size_t>(0));
-  std::cerr << "Number of vertices: " << adj.size() << std::endl;
-  std::cerr << "Number of edges: "    << m          << std::endl;
+  // std::cerr << "Number of vertices: " << adj.size() << std::endl;
+  // std::cerr << "Number of edges: "    << m          << std::endl;
   auto mapping = reorder(std::move(adj)); 
   
   std::vector<int> newid2cnt(num_nodes + partNum, 0);
@@ -423,7 +423,7 @@ int test_reorder(
   }
 
   std::sort(newids.begin(), newids.end());
-  
+
   #pragma omp parallel for
   for(int i = 0; i < partNum; i++) {
     int newid = newids[i];
@@ -442,11 +442,13 @@ int test_reorder(
     int partid = cnt2id[newid2cnt[newids[i]]];
     int partLen = partPointer_acc[partid + 1] - partPointer_acc[partid];
     int partStart = partPointer_acc[partid];
-    int id = ids_acc[partStart];
+    int id = isFor ? ids_acc[partid] : ids_acc[partStart];
     int idx = partPointerStart + i;
+    
+    int newid_index = isFor ? idx : newPartPointer_acc[idx];
+    newIds_acc[newid_index] = id;
     for(int j = 0; j < partLen; j++) {
       newEdgeList_acc[newPartPointer_acc[idx] + j] = edgeList_acc[partStart + j];
-      newIds_acc[newPartPointer_acc[idx] + j] = id;
     }
   }
 
