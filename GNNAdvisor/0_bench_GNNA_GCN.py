@@ -4,7 +4,7 @@ import argparse
 os.environ["PYTHONWARNINGS"] = "ignore"
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--backsize_model', type=str, default='use_map', choices=['use_map', 'use_net', 'use_32'],  help="map or net or 32")
+parser.add_argument('--partsize_model', type=str, default='use_map', choices=['use_map', 'use_net', 'use_32'],  help="map or net or 32")
 args = parser.parse_args()
 
 run_GCN = True              # whether to run GCN model. 
@@ -21,8 +21,6 @@ else:
     model = 'gin'
     warpPerBlock = 2        # only effective in manual model 2 for citeseer 6 for remaining datasets
     hidden = [64] 		
-
-partsize_li = [32]          # only effective in manual model
 
 dataset = [
         ('cora' 	        , 1433	    , 7 ,  ),        #
@@ -61,52 +59,58 @@ dataset = [
 ratios = [0.1, 0.3, 0.5, 0.8]
 # ratios = [0.3]
 
-# backsize = { 'cora' :       {0.1 : [2, 1], 0.3 : [3, 2], 0.5 : [3, 3], 0.8 : [3, 3]},
-#              'citeseer' :   {0.1 : [2, 1], 0.3 : [2, 2], 0.5 : [2, 2], 0.8 : [2, 2]},
-#              'pubmed' :     {0.1 : [3, 2], 0.3 : [3, 3], 0.5 : [3, 6], 0.8 : [3, 6]},
-#              'dblp' :       {0.1 : [6, 2], 0.3 : [6, 12], 0.5 : [6, 12], 0.8 : [6, 12]},
-#              'youtube' :    {0.1 : [16, 14], 0.3 : [14, 14], 0.5 : [14, 13], 0.8 : [14, 14]},
-#              'amazon' :     {0.1 : [6, 10], 0.3 : [6, 14], 0.5 : [6, 14], 0.8 : [6, 14]},
-#              'corafull' :   {0.1 : [3, 4], 0.3 : [3, 6], 0.5 : [3, 6], 0.8 : [3, 6]},
-#              'catalog' :    {0.1 : [28, 14], 0.3 : [28, 28], 0.5 : [28, 28], 0.8 : [28, 28]},
-#              'twitter' :    {0.1 : [12, 12], 0.3 : [12, 12], 0.5 : [12, 28], 0.8 : [12, 28]},
-#              'google' :     {0.1 : [8, 14], 0.3 : [8, 14], 0.5 : [8, 14], 0.8 : [8, 14]}}
+# backsize = { 'cora' :       {0.1 : [3, 1], 0.3 : [2, 3], 0.5 : [2, 3], 0.8 : [2, 2]},
+#              'citeseer' :   {0.1 : [1, 1], 0.3 : [3, 1], 0.5 : [3, 1], 0.8 : [3, 1]},
+#              'pubmed' :     {0.1 : [5, 1], 0.3 : [6, 3], 0.5 : [7, 3], 0.8 : [7, 7]},
+#              'dblp' :       {0.1 : [6, 1], 0.3 : [7, 3], 0.5 : [7, 5], 0.8 : [5, 5]},
+#              'youtube' :    {0.1 : [10, 8], 0.3 : [10, 7], 0.5 : [10, 7], 0.8 : [10, 10]},
+#              'amazon' :     {0.1 : [6, 9], 0.3 : [4, 7], 0.5 : [4, 15], 0.8 : [4, 4]},
+#              'corafull' :   {0.1 : [7, 1], 0.3 : [7, 3], 0.5 : [7, 5], 0.8 : [7, 7]},
+#              'catalog' :    {0.1 : [11, 11], 0.3 : [11, 11], 0.5 : [11, 11], 0.8 : [9, 10]},
+#              'twitter' :    {0.1 : [7, 11], 0.3 : [7, 11], 0.5 : [7, 7], 0.8 : [7, 7]},
+#              'google' :     {0.1 : [6, 6], 0.3 : [6, 7], 0.5 : [6, 10], 0.8 : [6, 6]}}
 
-backsize = { 'cora' :       {0.1 : [3, 1], 0.3 : [2, 3], 0.5 : [2, 3], 0.8 : [2, 2]},
-             'citeseer' :   {0.1 : [1, 1], 0.3 : [3, 1], 0.5 : [3, 1], 0.8 : [3, 1]},
-             'pubmed' :     {0.1 : [5, 1], 0.3 : [6, 3], 0.5 : [7, 3], 0.8 : [7, 7]},
-             'dblp' :       {0.1 : [6, 1], 0.3 : [7, 3], 0.5 : [7, 5], 0.8 : [5, 5]},
-             'youtube' :    {0.1 : [10, 8], 0.3 : [10, 7], 0.5 : [10, 7], 0.8 : [10, 10]},
-             'amazon' :     {0.1 : [6, 9], 0.3 : [4, 7], 0.5 : [4, 15], 0.8 : [4, 4]},
+
+
+backsize = { 'cora' :       {0.1 : [2, 1], 0.3 : [2, 2], 0.5 : [2, 2], 0.8 : [2, 2]},
+             'citeseer' :   {0.1 : [2, 1], 0.3 : [2, 1], 0.5 : [2, 2], 0.8 : [2, 2]},
+             'pubmed' :     {0.1 : [5, 1], 0.3 : [7, 3], 0.5 : [7, 5], 0.8 : [7, 7]},
+             'dblp' :       {0.1 : [7, 1], 0.3 : [7, 3], 0.5 : [7, 5], 0.8 : [7, 7]},
+             'youtube' :    {0.1 : [10, 8], 0.3 : [6, 7], 0.5 : [6, 10], 0.8 : [6, 10]},
+             'amazon' :     {0.1 : [6, 9], 0.3 : [6, 7], 0.5 : [4, 6], 0.8 : [4, 6]},
              'corafull' :   {0.1 : [7, 1], 0.3 : [7, 3], 0.5 : [7, 5], 0.8 : [7, 7]},
-             'catalog' :    {0.1 : [11, 11], 0.3 : [11, 11], 0.5 : [11, 11], 0.8 : [9, 10]},
-             'twitter' :    {0.1 : [7, 11], 0.3 : [7, 11], 0.5 : [7, 7], 0.8 : [7, 7]},
-             'google' :     {0.1 : [6, 6], 0.3 : [6, 7], 0.5 : [6, 10], 0.8 : [6, 6]}}
+             'catalog' :    {0.1 : [11, 11], 0.3 : [11, 11], 0.5 : [21, 11], 0.8 : [27, 21]},
+             'twitter' :    {0.1 : [11, 11], 0.3 : [11, 11], 0.5 : [27, 11], 0.8 : [16, 27]},
+             'google' :     {0.1 : [6, 8], 0.3 : [6, 10], 0.5 : [6, 6], 0.8 : [6, 6]}}
 
+forsize = { 'cora' : 2, 'citeseer' : 2, 'pubmed' : 6, 'dblp' : 7, 'youtube' : 6,
+            'amazon' : 4, 'corafull' : 7, 'catalog' : 27, 'twitter' : 16, 'google' : 6}
 
-for partsize in partsize_li:
-    for hid in hidden:
-        for data, d, c in dataset:
-            # print(data)
-            for ratio in ratios:
-                # print(ratio)
-                dataDir = "/home/yc/data_scale_test/" + data
-                l1_backsize = 0
-                l2_backsize = 0
-                if args.backsize_model == "use_net":
-                    l1_backsize = backsize[data][ratio][0]
-                    l2_backsize = backsize[data][ratio][1]
-                elif args.backsize_model == "use_32":
-                    l1_backsize = 32
-                    l2_backsize = 32
-                # dataDir = "../osdi-ae-graphs/"
-                #--manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {}
-                command = "python /home/yc/OSDI21_AE-master/GNNAdvisor/GNNA_main.py --dataset {} --dim {} --hidden {} \
-                            --classes {} --partSize {} --model {} --warpPerBlock {}\
-                            --manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {} --l1_backsize {}  --l2_backsize {}"
-                command = command.format(data, d, hid, c, partsize, model, warpPerBlock,\
-                                        manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir, ratio, l1_backsize, l2_backsize)		
-                # print(command)
-                                        # manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir)		
-                # command = "python GNNA_main.py -loadFromTxt --dataset {} --partSize {} --dataDir {}".format(data, partsize, '/home/yuke/.graphs/orig')		 
-                os.system(command)
+partsize = 0
+
+for hid in hidden:
+    for data, d, c in dataset:
+        # print(data)
+        for ratio in ratios:
+            # print(ratio)
+            dataDir = "/home/yc/data_scale_test/" + data
+            l1_backsize = 0
+            l2_backsize = 0
+            if args.partsize_model == "use_net":
+                l1_backsize = backsize[data][ratio][0]
+                l2_backsize = backsize[data][ratio][1]
+                partsize = forsize[data]
+            elif args.partsize_model == "use_32":
+                l1_backsize = 32
+                l2_backsize = 32
+            # dataDir = "../osdi-ae-graphs/"
+            #--manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {}
+            command = "python /home/yc/OSDI21_AE-master/GNNAdvisor/GNNA_main.py --dataset {} --dim {} --hidden {} \
+                        --classes {} --partSize {} --model {} --warpPerBlock {}\
+                        --manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {} --l1_backsize {}  --l2_backsize {}"
+            command = command.format(data, d, hid, c, partsize, model, warpPerBlock,\
+                                    manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir, ratio, l1_backsize, l2_backsize)		
+            # print(command)
+                                    # manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir)		
+            # command = "python GNNA_main.py -loadFromTxt --dataset {} --partSize {} --dataDir {}".format(data, partsize, '/home/yuke/.graphs/orig')		 
+            os.system(command)

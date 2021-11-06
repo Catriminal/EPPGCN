@@ -148,16 +148,17 @@ class inputProperty(object):
         else:
             # Determine the neighbor partitioning.
             # self.partSize = int(self.avgNodeDegree)
-            if self.avgNodeDegree < 4:
-                self.partSize = 4
-            elif self.avgNodeDegree >= 4 and self.avgNodeDegree < 16:
-                self.partSize = 8
-            elif self.avgNodeDegree >= 16 and self.avgNodeDegree < 64:
-                self.partSize = 16
-            elif self.avgNodeDegree >= 64 and self.avgNodeDegree < 256:
-                self.partSize = 32
-            elif self.avgNodeDegree >= 256 and self.avgNodeDegree < 512:
-                self.partSize = 64
+            if self.partSize == 0:
+                if self.avgNodeDegree < 4:
+                    self.partSize = 4
+                elif self.avgNodeDegree >= 4 and self.avgNodeDegree < 16:
+                    self.partSize = 8
+                elif self.avgNodeDegree >= 16 and self.avgNodeDegree < 64:
+                    self.partSize = 16
+                elif self.avgNodeDegree >= 64 and self.avgNodeDegree < 256:
+                    self.partSize = 32
+                elif self.avgNodeDegree >= 256 and self.avgNodeDegree < 512:
+                    self.partSize = 64
 
             est_shared = self.MAX_warpPerBlock * (self.partSize * 4 + self.inputDim * 4 + self.gap_smem * 4)/1e3
             if self.verbose_flag:

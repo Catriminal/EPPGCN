@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# datasets=("cora" "citeseer" "pubmed" "chameleon" "actor" "blog" "youtube" "amazon" "corafull" "catalog" "twitter" "google")
-datasets=("catalog")
+datasets=("cora" "citeseer" "pubmed" "chameleon" "actor" "blog" "youtube" "amazon" "corafull" "catalog" "twitter" "google")
+# datasets=("catalog")
 ratios=(0.1 0.3 0.5 0.8)
 dims=(1433 3703 500 2325 931 512 64 96 64 64 64 64)
 classes=(7 6 3 5 5 39 47 22 32 32 32 32)

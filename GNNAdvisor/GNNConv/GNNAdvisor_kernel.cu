@@ -65,21 +65,16 @@ __global__ void ours_forward_cuda_kernel(
     const int partSize
 );
 
-template <typename scalar_t>
+template <typename T>
 __global__ void mask_forward_cuda_kernel(
-    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_input,
-    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_output,
-    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> ids,
-    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> partPointer,
-    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> edgeList,
-    torch::PackedTensorAccessor32<float,1,torch::RestrictPtrTraits> src_norms,
+    torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> ids,
+    torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> partPointer,
+    torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> edgeList,
     torch::PackedTensorAccessor32<bool,1,torch::RestrictPtrTraits> src_mask,
     torch::PackedTensorAccessor32<bool,1,torch::RestrictPtrTraits> ngh_mask,
     torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> backEdgeMask,
     torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> node_degs,
     const int num_parts,
-    const int dim,
-    const int partSize,
     const bool isLastLayer
 );
 
@@ -310,6 +305,7 @@ float l1_back_sum_time = 0.0;
 float l2_back_sum_time = 0.0;
 float back_sum_time = 0.0;
 float back_com_time = 0.0;
+float mask_time = 0.0;
 
 void print_time() {
     // printf("kernel time: %.6f\n", (for_sum_time + for_com_time + back_sum_time + back_com_time)/ 1000);
@@ -319,6 +315,7 @@ void print_time() {
     // printf("back_com_time: %.6f\n", back_com_time / 1000);
     printf("l1_back_agg_time: %.6f\n", l1_back_sum_time / 1000);
     printf("l2_back_agg_time: %.6f\n", l2_back_sum_time / 1000);
+    printf("mask_time: %.6f\n", mask_time / 1000);
 }
 
 void clear_time() {
@@ -575,59 +572,39 @@ std::vector<torch::Tensor> ours_forward_cuda(
     return {output};
 }
 
-std::vector<torch::Tensor> mask_forward_cuda(
-    torch::Tensor input,
-    torch::Tensor weight,
+void mask_forward_cuda(
     torch::Tensor id,
     torch::Tensor partPointer,
     torch::Tensor edgeList,
-    torch::Tensor degrees,
     torch::Tensor src_mask,
     torch::Tensor ngh_mask,
     torch::Tensor backEdgeMask,
     torch::Tensor node_degs,
-    int partSize, 
     int layer,
     int blockx, 
     int blocky
 ) {
+
+    const int num_parts = id.size(0);
+    dim3 blocksize(blockx, blocky);
+    const int grid = num_parts / blocksize.y + 1;
+
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     float time = 0.0;
-
-    cudaEventRecord(start, 0);
-    auto tmp = torch::mm(input, weight);
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(start);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, stop);
-    for_com_time += time;
-
-    auto output = torch::zeros({input.size(0), weight.size(1)}, torch::kCUDA);
-    const int dim = output.size(1);
-    const int num_nodes = output.size(0);
-    const int num_parts = id.size(0);
-    dim3 blocksize(blockx, blocky);
-    const int grid = num_parts / blocksize.y + 1;
-    size_t shared_mem_size = dim * blocksize.y * sizeof(float);
     
     cudaEventRecord(start, 0);
-    AT_DISPATCH_FLOATING_TYPES(input.type(), "mask_forward_cuda", ([&] {
-                        mask_forward_cuda_kernel<scalar_t><<<grid, blocksize, shared_mem_size>>>(
-                            tmp.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
-                            output.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
+    AT_DISPATCH_ALL_TYPES(id.type(), "mask_forward_cuda__", ([&] {
+                        mask_forward_cuda_kernel<int><<<grid, blocksize>>>(
                             id.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
                             partPointer.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
                             edgeList.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
-                            degrees.packed_accessor32<float,1,torch::RestrictPtrTraits>(),
                             src_mask.packed_accessor32<bool,1,torch::RestrictPtrTraits>(),
                             ngh_mask.packed_accessor32<bool,1,torch::RestrictPtrTraits>(),
                             backEdgeMask.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
                             node_degs.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
                             num_parts,
-                            dim,
-                            partSize,
                             layer == 2
                         );
                     }));
@@ -639,15 +616,13 @@ std::vector<torch::Tensor> mask_forward_cuda(
     cudaEventElapsedTime(&time, start, stop);
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
-    for_sum_time += time;
+    mask_time += time;
 
     cudaError_t error = cudaGetLastError();
     if(error != cudaSuccess){
         printf("CUDA error: %s\n", cudaGetErrorString(error));
         exit(-1);
     }
-
-    return {output};
 }
 
 
@@ -692,45 +667,30 @@ __global__ void ours_forward_cuda_kernel(
 	}
 }
 
-template <typename scalar_t>
+template <typename T>
 __global__ void mask_forward_cuda_kernel(
-    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_input,
-    torch::PackedTensorAccessor32<scalar_t,2,torch::RestrictPtrTraits> d_output,
-    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> ids,
-    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> partPointer,
-    torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> edgeList,
-    torch::PackedTensorAccessor32<float,1,torch::RestrictPtrTraits> src_norms,
+    torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> ids,
+    torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> partPointer,
+    torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> edgeList,
     torch::PackedTensorAccessor32<bool,1,torch::RestrictPtrTraits> src_mask,
     torch::PackedTensorAccessor32<bool,1,torch::RestrictPtrTraits> ngh_mask,
     torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> backEdgeMask,
     torch::PackedTensorAccessor32<int,1,torch::RestrictPtrTraits> node_degs,
     const int num_parts,
-    const int dim,
-    const int partSize,
     const bool isLastLayer
 ) {
     int partId = blockDim.y * blockIdx.x + threadIdx.y;
 
 	if(partId < num_parts)
 	{
-        int id = ids[partId];
-        int partStart = partPointer[partId];
-		extern __shared__ float feats[];
-		
-		for(int j = threadIdx.x; j < dim; j += blockDim.x)
-			feats[threadIdx.y * dim + j] = 0;
+        T id = ids[partId];
+        T partStart = partPointer[partId];
 
-        int size = partPointer[partId + 1] - partPointer[partId];
+        T size = partPointer[partId + 1] - partPointer[partId];
         int mask_active_count = 0;
 		for(int i = 0; i < size; i++)
 		{	
-			int end_id = edgeList[partStart + i];
-            float src_norm = src_norms[id];
-            float weight =  __fmaf_rn(src_norm, src_norms[end_id], 0);
-            
-            for(int j = threadIdx.x; j < dim; j += blockDim.x) {
-                feats[threadIdx.y * dim + j] += d_output[end_id][j] * weight;
-            }
+			T end_id = edgeList[partStart + i];
 
             if(!isLastLayer && src_mask[id]) {
                 ngh_mask[id] = true;
@@ -743,10 +703,6 @@ __global__ void mask_forward_cuda_kernel(
             mask_active_count += threadIdx.x == 0 && src_mask[end_id];
 		}
         atomicAdd(&(node_degs[id]), mask_active_count);
-
-		for(int j = threadIdx.x; j < dim; j += blockDim.x) {
-            atomicAdd(&(d_input[id][j]), feats[threadIdx.y * dim + j]);
-		}
 	}
 }
 

@@ -54,18 +54,14 @@ std::vector<torch::Tensor> ours_forward_cuda(
     int blocky
 );
 
-std::vector<torch::Tensor> mask_forward_cuda(
-    torch::Tensor input,
-    torch::Tensor weight,
+void mask_forward_cuda(
     torch::Tensor id,
     torch::Tensor partPointer,
     torch::Tensor edgeList,
-    torch::Tensor degrees,
     torch::Tensor src_mask,
     torch::Tensor ngh_mask,
     torch::Tensor backEdgeMask,
     torch::Tensor node_degs,
-    int partSize, 
     int layer,
     int blockx, 
     int blocky
@@ -226,37 +222,28 @@ std::vector<torch::Tensor> ours_forward(
                             edgeList, degrees, partSize, blockx, blocky);
 }
 
-std::vector<torch::Tensor> mask_forward(
-    torch::Tensor input,
-    torch::Tensor weight,
+void mask_forward(
     torch::Tensor id,
     torch::Tensor partPointer,
     torch::Tensor edgeList,
-    torch::Tensor degrees,
     torch::Tensor src_mask,
     torch::Tensor ngh_mask,
     torch::Tensor backEdgeMask,
     torch::Tensor node_degs,
-    int partSize, 
     int layer,
     int blockx, 
     int blocky
   ) {
-  CHECK_INPUT(input);
-  CHECK_INPUT(weight);
   CHECK_INPUT(id);
   CHECK_INPUT(partPointer);
   CHECK_INPUT(edgeList);
-  CHECK_INPUT(degrees);
   CHECK_INPUT(src_mask);
   CHECK_INPUT(ngh_mask);
   CHECK_INPUT(backEdgeMask);
   CHECK_INPUT(node_degs);
 
-  return mask_forward_cuda(input, weight, id, partPointer, 
-                            edgeList, degrees, src_mask, ngh_mask, 
-                            backEdgeMask, node_degs, partSize,
-                            layer, blockx, blocky);
+  mask_forward_cuda(id, partPointer, edgeList, src_mask, ngh_mask, 
+                            backEdgeMask, node_degs, layer, blockx, blocky);
 }
 
 std::vector<torch::Tensor> ours_backward(

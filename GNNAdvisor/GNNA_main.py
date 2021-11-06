@@ -231,12 +231,14 @@ def buildBackPart():
 for_time = 0.0
 loss_time = 0.0
 back_time = 0.0
+build_time = 0.0
 other_time = 0.0
 
 def train(isFirstIter):
     global for_time
     global loss_time
     global back_time
+    global build_time
     # global other_time
     # torch.cuda.synchronize()
     # start = time.perf_counter()
@@ -253,7 +255,9 @@ def train(isFirstIter):
     for_time += time.perf_counter() - start
 
     if(isFirstIter):
+        start = time.perf_counter()
         buildBackPart()
+        build_time += time.perf_counter() - start
 
     # torch.cuda.synchronize()
     start = time.perf_counter()
@@ -296,6 +300,7 @@ if __name__ == '__main__':
     print('for_time: {:.6f}'.format(for_time))
     print('loss_time: {:.6f}'.format(loss_time))
     print('back_time: {:.6f}'.format(back_time))
+    print('build_time: {:.6f}'.format(build_time))
     print('Time: {:.6f}'.format(total_time))
     # print('Time (ms): {:.3f}'.format(total_time*1e3/args.num_epoches))
     print()
