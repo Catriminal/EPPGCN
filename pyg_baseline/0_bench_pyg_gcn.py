@@ -9,12 +9,18 @@ hidden = [16]
 # hidden = [64]
 
 dataset = [
+        # ( 'amazon0505'               , 96	, 22),
+        # ( 'artist'                   , 100  , 12),
+        # ( 'com-amazon'               , 96	, 22),
+        # ( 'soc-BlogCatalog'	       	 , 128  , 39), 
+        # ( 'amazon0601'  	         , 96	, 22), 
+
         ('PROTEINS_full'             , 29       , 2) ,   
         ('OVCAR-8H'                  , 66       , 2) , 
         ('Yeast'                     , 74       , 2) ,
         ('DD'                        , 89       , 2) ,
-        ('TWITTER-Real-Graph-Partial', 1323     , 2) ,   
-        ('SW-620H'                   , 66       , 2) ,
+        # ('TWITTER-Real-Graph-Partial', 1323     , 2) ,   
+        # ('SW-620H'                   , 66       , 2) ,
 ]
 
 

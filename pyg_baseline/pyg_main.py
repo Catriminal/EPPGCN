@@ -12,13 +12,15 @@ from torch.nn import Linear
 
 from dataset import *
 
+from torch.autograd.profiler import profile, record_function
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataDir", type=str, default="../osdi-ae-graphs", help="the directory path to graphs")
+parser.add_argument("--dataDir", type=str, default="../../osdi-ae-graphs", help="the directory path to graphs")
 parser.add_argument("--dataset", type=str, default='amazon0601', help="dataset")
 parser.add_argument("--dim", type=int, default=96, help="input embedding dimension")
 parser.add_argument("--hidden", type=int, default=16, help="hidden dimension")
 parser.add_argument("--classes", type=int, default=22, help="number of output classes")
-parser.add_argument("--epochs", type=int, default=200, help="number of epoches")
+parser.add_argument("--epochs", type=int, default=5, help="number of epoches")
 parser.add_argument("--model", type=str, default='gcn', choices=['gcn', 'gin'], help="type of model")
 args = parser.parse_args()
 print(args)
@@ -77,7 +79,11 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 def train():
     model.train()
     optimizer.zero_grad()
-    F.nll_loss(model()[data.train_mask], data.y[data.train_mask]).backward()
+    loss = F.nll_loss(model()[data.train_mask], data.y[data.train_mask])
+    
+    with torch.autograd.profiler.profile(enabled=True, use_cuda=True, record_shapes=True, profile_memory=False) as prof:
+        loss.backward()
+
     optimizer.step()
 
 torch.cuda.synchronize()
@@ -87,8 +93,18 @@ for epoch in tqdm(range(1, args.epochs + 1)):
 torch.cuda.synchronize()
 dur = time.perf_counter() - start
 
+# model.train()
+# optimizer.zero_grad()
+# loss = F.nll_loss(model()[data.train_mask], data.y[data.train_mask])
+
+# with torch.autograd.profiler.profile(enabled=True, use_cuda=True, record_shapes=False, profile_memory=False) as prof:
+#     loss.backward()
+
+
 if args.model == 'gcn':
     print("GCN (L2-H16) -- Avg Epoch (ms): {:.3f}".format(dur*1e3/args.epochs))
 else:
     print("GIN (L5-H64) -- Avg Epoch (ms): {:.3f}".format(dur*1e3/args.epochs))
 print()
+
+# print(prof.key_averages().table(sort_by='cuda_time_total'))
