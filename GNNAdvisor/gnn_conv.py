@@ -42,11 +42,11 @@ class GNNAFunction(torch.autograd.Function):
         # print("[Foward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
         #                                                     ctx.dimWorker, ctx.warpPerBlock))
 
-        # X_prime = GNNA.forward(X, weight, inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index,
-        #                         inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
-        #                         inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)[0]
-        X_prime = GNNA.ours_forward(X, weight, inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index,
-                                        inputInfo.degrees, inputInfo.partSize, maskInfo.blockx, maskInfo.blocky)[0]
+        X_prime = GNNA.forward(X, weight, inputInfo.row_pointers, inputInfo.column_index, 
+                                inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
+                                inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)[0]
+        # X_prime = GNNA.ours_forward(X, weight, inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index,
+        #                                 inputInfo.degrees, inputInfo.partSize, maskInfo.blockx, maskInfo.blocky)[0]
         
         if isFirstIter:
             GNNA.mask_forward(inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index, maskInfo.src_mask, maskInfo.ngh_mask,

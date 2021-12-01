@@ -379,7 +379,8 @@ std::vector<torch::Tensor> build_back_part(
     torch::Tensor edge_mask,
     torch::Tensor column_index,
     torch::Tensor node_deg,
-    int back_part_size
+    int back_part_size,
+    int dim
   ) {
   int num_nodes = node_deg.size(0);
   int num_edges = edge_mask.size(0);
@@ -390,7 +391,7 @@ std::vector<torch::Tensor> build_back_part(
   int valid_len = compact_mask(edge_mask.data_ptr<int>(), id.data_ptr<int>(), column_index.data_ptr<int>(), edge_list.data_ptr<int>(), num_edges, 1024);
   // std::cout << "mask after " << valid_len << std::endl;
   if(back_part_size == 0) {
-    // if(model_input == "") {
+
       int valid_node = compact_count(node_deg.data_ptr<int>(), num_nodes, 1024);
       int valid_degree = valid_len / valid_node;
       if(valid_degree < 4) {
@@ -404,17 +405,12 @@ std::vector<torch::Tensor> build_back_part(
       } else if(valid_degree >= 256 && valid_degree < 512) {
         back_part_size = 64;
       }
-    // } else {
-      // string cmd = "/home/yc/param_opt/param_pred.py --dataset " + model_input;
-      // FILE *fp;
-      // if(fp = popen(cmd.data(), "r")) {
-      //   char line[50];
-      //   if(fgets(line, sizeof(line) - 1, fp) != NULL) {
-      //     back_part_size = atoi(line);
-      //   }
+
+      // if(dim >= 32) {
+      //   back_part_size = 32;
+      // } else {
+      //   back_part_size = 16;
       // }
-      // pclose(fp);
-    // }
   }
 
   auto part_count = torch::zeros_like(column_index);
