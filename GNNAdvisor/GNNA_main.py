@@ -14,6 +14,8 @@ import GNNAdvisor as GNNA           # import GNNAdvisor
 from gnn_conv import *
 from dataset import *
 
+from net_pred import *
+
 parser = argparse.ArgumentParser()
 # Dataset related parameters.
 parser.add_argument("--dataDir", type=str, default="../osdi-ae-graphs", help="the path to graphs")
@@ -60,7 +62,7 @@ verify_spmm = args.verify_spmm == 'True'
 # requires GPU for evaluation.
 assert torch.cuda.is_available()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 
 ####################################
 # loading data from files
@@ -212,21 +214,39 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 ####################################
 
 def buildBackPart():
+    cpu_device = torch.device('cpu')
+    l1_back_input_prop.id, l1_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l1_edge_mask, inputInfo.column_index)
+    l1_back_input_prop.partSize = net_pred(l1_back_input_prop.id.to(cpu_device), 
+            l1_back_input_prop.edgeList.to(cpu_device),
+            dataset.l1_node_degs.to(cpu_device),
+            int(valid_len_tensor[0].item()))
+    # print(type(num_edges))
+    # print(type(l1_back_input_prop.partSize))
+    # print(dataset.l1_node_degs)
+    l1_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l1_node_degs, num_edges, l1_back_input_prop.partSize)
+    l1_back_input_prop.numParts = int(num_parts_tensor[0].item())
 
-    l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPointer, l1_back_info = \
-        GNNA.build_back_part(dataset.l1_edge_mask, inputInfo.column_index, dataset.l1_node_degs, args.l1_backsize, l1_back_input_prop.dim)
+    l2_back_input_prop.id, l2_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l2_edge_mask, inputInfo.column_index)
+    l2_back_input_prop.partSize = net_pred(l2_back_input_prop.id.to(cpu_device), 
+            l2_back_input_prop.edgeList.to(cpu_device),
+            dataset.l2_node_degs.to(cpu_device),
+            int(valid_len_tensor[0].item()))
+    l2_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l2_node_degs, num_edges, l2_back_input_prop.partSize)
+    l2_back_input_prop.numParts = int(num_parts_tensor[0].item())
 
-    l1_back_input_prop.partSize = int(l1_back_info[0].item())
-    l1_back_input_prop.numParts = int(l1_back_info[1].item())
-    # l1_back_input_prop.reorder(num_nodes)
+    # l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPointer, l1_back_info = \
+    #     GNNA.build_back_part(dataset.l1_edge_mask, inputInfo.column_index, dataset.l1_node_degs, args.l1_backsize, l1_back_input_prop.dim)
+    # l1_back_input_prop.partSize = int(l1_back_info[0].item())
+    # l1_back_input_prop.numParts = int(l1_back_info[1].item())
+    # # l1_back_input_prop.reorder(num_nodes)
 
-    l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
-        GNNA.build_back_part(dataset.l2_edge_mask, inputInfo.column_index, dataset.l2_node_degs, args.l2_backsize, l2_back_input_prop.dim)
+    # l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
+    #     GNNA.build_back_part(dataset.l2_edge_mask, inputInfo.column_index, dataset.l2_node_degs, args.l2_backsize, l2_back_input_prop.dim)
 
-    l2_back_input_prop.partSize = int(l2_back_info[0].item())
-    l2_back_input_prop.numParts = int(l2_back_info[1].item())
-    # l2_back_input_prop.reorder(num_nodes)
-    # print("build back part.")
+    # l2_back_input_prop.partSize = int(l2_back_info[0].item())
+    # l2_back_input_prop.numParts = int(l2_back_info[1].item())
+    # # l2_back_input_prop.reorder(num_nodes)
+    # # print("build back part.")
 
 for_time = 0.0
 loss_time = 0.0

@@ -428,6 +428,106 @@ std::vector<torch::Tensor> build_back_part(
   return {id, edge_list, part_pointer, info};
 }
 
+std::vector<torch::Tensor> compact_back_edge(
+    torch::Tensor edge_mask,
+    torch::Tensor column_index
+  ) {
+  int num_edges = edge_mask.size(0);
+
+  auto id = torch::zeros_like(edge_mask);
+  auto edge_list = torch::zeros_like(column_index);
+  // std::cout << "mask before" << std::endl;
+  int valid_len = compact_mask(edge_mask.data_ptr<int>(), id.data_ptr<int>(), column_index.data_ptr<int>(), edge_list.data_ptr<int>(), num_edges, 1024);
+  // std::cout << "mask after " << valid_len << std::endl;
+  auto info = torch::zeros(1);
+  info[0] = valid_len;
+  return {id, edge_list, info};
+}
+
+int get_map_back_part_size(
+    torch::Tensor node_deg,
+    int valid_len
+  ) {
+  int back_part_size = 0;
+  int num_nodes = node_deg.size(0);
+  int valid_node = compact_count(node_deg.data_ptr<int>(), num_nodes, 1024);
+  int valid_degree = valid_len / valid_node;
+  if(valid_degree < 4) {
+    back_part_size = 4;
+  } else if(valid_degree >= 4 && valid_degree < 16) {
+    back_part_size = 8;
+  } else if(valid_degree >= 16 && valid_degree < 64) {
+    back_part_size = 16;
+  } else if(valid_degree >= 64 && valid_degree < 256) {
+    back_part_size = 32;
+  } else if(valid_degree >= 256 && valid_degree < 512) {
+    back_part_size = 64;
+  }
+
+  return back_part_size;
+}
+
+std::vector<torch::Tensor> split_back_part(
+    torch::Tensor node_deg,
+    int num_edges,
+    int back_part_size
+  ) {
+  int num_nodes = node_deg.size(0);
+
+  auto part_count = torch::zeros(num_edges, torch::kCUDA).to(torch::kInt);
+  auto part_pointer = torch::zeros(num_edges, torch::kCUDA).to(torch::kInt);
+  // std::cout << "part before" << std::endl;
+  int num_parts = compact_part(node_deg.data_ptr<int>(), part_count.data_ptr<int>(), num_nodes, 1024, back_part_size);
+  // std::cout << "part after " << num_parts << std::endl;
+  exclusive_scan(part_count.data_ptr<int>(), part_pointer.data_ptr<int>(), num_parts);
+  // std::cout << "scan after" << std::endl;
+
+  auto info = torch::zeros(1, torch::kInt);
+  info[0] = num_parts;
+  // std::cout << "info after" << std::endl;
+  return {part_pointer, info};
+}
+
+torch::Tensor get_ginfo(
+    torch::Tensor node_deg,
+    int valid_len
+  ) {
+  int num_nodes = node_deg.size(0);
+  int *node_deg_acc = node_deg.data_ptr<int>();
+  auto re = torch::zeros(10);
+  float ginfo[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0 ,0};
+  #pragma omp parallel for reduction(+ : ginfo[:10])
+  for(int i = 0; i < num_nodes; i++) {
+    int deg = node_deg_acc[i];
+    if(deg != 0) {
+      ginfo[0]++;
+    }
+    if(deg >= 1 && deg < 5) {
+      ginfo[3]++;
+    } else if(deg >= 5 && deg < 10) {
+      ginfo[4]++;
+    } else if(deg >= 10 && deg < 20) {
+      ginfo[5]++;
+    } else if(deg >= 20 && deg < 40) {
+      ginfo[6]++;
+    } else if(deg >= 40 && deg < 80) {
+      ginfo[7]++;
+    } else if(deg >= 80 && deg < 160) {
+      ginfo[8]++;
+    } else {
+      ginfo[9]++;
+    }
+  }
+  int valid_node = ginfo[0];
+  re[0] = valid_node * 1.0 / 10000;
+  re[1] = valid_len * 1.0 / 10000;
+  re[2] = 1.0 * valid_len / valid_node;
+  for(int i = 3; i < 10; i++) {
+    re[i] = ginfo[i] * 1.0 / valid_node;
+  }
+  return re;
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("SAG", &SAG, "GNNAdvisor base Scatter-and-Gather Kernel (CUDA)");
 
@@ -444,4 +544,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
   m.def("build_part", &build_part, "GNNAdvisor backward (CPU)");
   m.def("build_back_part", &build_back_part, "ours build back part (CUDA)");
+  m.def("compact_back_edge", &compact_back_edge, "ours compact back edge (CUDA)");
+  m.def("get_map_back_part_size", &get_map_back_part_size, "ours get map back part size (CUDA)");
+  m.def("split_back_part", &split_back_part, "ours split back part (CUDA)");
+  m.def("get_ginfo", &get_ginfo, "ours get ginfo (CUDA)");
   }
