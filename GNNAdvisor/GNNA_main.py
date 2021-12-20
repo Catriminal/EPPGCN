@@ -216,10 +216,13 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 def buildBackPart():
     cpu_device = torch.device('cpu')
     l1_back_input_prop.id, l1_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l1_edge_mask, inputInfo.column_index)
-    l1_back_input_prop.partSize = net_pred(l1_back_input_prop.id.to(cpu_device), 
+    l1_back_input_prop.partSize = get_net_back_part_size(l1_back_input_prop.id.to(cpu_device), 
             l1_back_input_prop.edgeList.to(cpu_device),
             dataset.l1_node_degs.to(cpu_device),
-            int(valid_len_tensor[0].item()))
+            int(valid_len_tensor[0].item()),
+            args.dataset,
+            args.train_ratio,
+            1)
     # print(type(num_edges))
     # print(type(l1_back_input_prop.partSize))
     # print(dataset.l1_node_degs)
@@ -227,10 +230,13 @@ def buildBackPart():
     l1_back_input_prop.numParts = int(num_parts_tensor[0].item())
 
     l2_back_input_prop.id, l2_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l2_edge_mask, inputInfo.column_index)
-    l2_back_input_prop.partSize = net_pred(l2_back_input_prop.id.to(cpu_device), 
+    l2_back_input_prop.partSize = get_net_back_part_size(l2_back_input_prop.id.to(cpu_device), 
             l2_back_input_prop.edgeList.to(cpu_device),
             dataset.l2_node_degs.to(cpu_device),
-            int(valid_len_tensor[0].item()))
+            int(valid_len_tensor[0].item()),
+            args.dataset,
+            args.train_ratio,
+            2)
     l2_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l2_node_degs, num_edges, l2_back_input_prop.partSize)
     l2_back_input_prop.numParts = int(num_parts_tensor[0].item())
 

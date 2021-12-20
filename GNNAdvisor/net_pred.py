@@ -1,16 +1,25 @@
 #!/usr/bin/env python
 
 import torch
-import numpy as np
 from torch_geometric.data import Data
 from torch_geometric.data import DataLoader
 from networks import Net
 from torch.utils.data import random_split
 import time
 import GNNAdvisor as GNNA
+import pandas as pd
 
+conf_path = "/home/yc/OSDI21_AE-master/GNNAdvisor/net_pred_part_size"
 
-def net_pred(id, edge_list, node_deg, valid_len):
+def fileFetch(key):
+    part_sizes = pd.read_csv(conf_path, names=["dataset", "part_size"], header=None, sep=' ')
+    part_sizes = dict(zip(part_sizes['dataset'], part_sizes['part_size']))
+    if key in part_sizes:
+        return part_sizes[key]
+    else:
+        return None
+
+def net_pred(id, edge_list, node_deg, valid_len, key):
     data_time = 0.0
     start = time.perf_counter()
     local_start = time.perf_counter()
@@ -94,4 +103,16 @@ def net_pred(id, edge_list, node_deg, valid_len):
     print('load_time: {:.6f}'.format(load_time))
     print('pred_time: {:.6f}'.format(pred_time))
 
-    return int(pred.item() + 1)
+    re = int(pred.item()) + 1
+    with open(conf_path, "a+") as f:
+        f.write(key + ' ' + str(re) + '\n')
+
+    return re
+
+def get_net_back_part_size(id, edge_list, node_deg, valid_len, dataset, train_ratio, layer):
+    key = dataset + '_b' + str(layer) + '_' + str(train_ratio)
+    re = fileFetch(key)
+    if re is None:
+        re = net_pred(id, edge_list, node_deg, valid_len, key)
+    
+    return re
