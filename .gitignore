@@ -21,3 +21,4 @@ cmake-3.16.5
 GNNAdvisor/nvprof*_re/*
 GNNAdvisor/nvprof_hit_re/*
 GNNAdvisor/*.txt
+GNNAdvisor/net_pred_part_size

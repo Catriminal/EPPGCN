@@ -57,7 +57,7 @@ dataset = [
 ]
 
 ratios = [0.1, 0.3, 0.5, 0.8]
-# ratios = [0.8]
+# ratios = [0.1]
 
 # backsize = { 'cora' :       {0.1 : [2, 1], 0.3 : [2, 2], 0.5 : [2, 2], 0.8 : [2, 2]},
 #              'citeseer' :   {0.1 : [2, 1], 0.3 : [2, 1], 0.5 : [2, 2], 0.8 : [2, 2]},
@@ -97,20 +97,23 @@ for hid in hidden:
             dataDir = "/home/yc/data_scale_test/" + data
             l1_backsize = 0
             l2_backsize = 0
+            backMode = 'map'
             if args.partsize_model == "use_net":
-                l1_backsize = backsize[data][ratio][0]
-                l2_backsize = backsize[data][ratio][1]
-                partsize = forsize[data]
+                backMode = 'net'
+                # l1_backsize = backsize[data][ratio][0]
+                # l2_backsize = backsize[data][ratio][1]
+                # partsize = forsize[data]
             elif args.partsize_model == "use_32":
+                backMode = 'constant'
                 l1_backsize = 32
                 l2_backsize = 32
             # dataDir = "../osdi-ae-graphs/"
             #--manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {}
             command = "python /home/yc/OSDI21_AE-master/GNNAdvisor/GNNA_main.py --dataset {} --dim {} --hidden {} \
                         --classes {} --partSize {} --model {} --warpPerBlock {}\
-                        --manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {} --l1_backsize {}  --l2_backsize {}"
+                        --manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {} --backsize_mode {} --l1_backsize {}  --l2_backsize {}"
             command = command.format(data, d, hid, c, partsize, model, warpPerBlock,\
-                                    manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir, ratio, l1_backsize, l2_backsize)		
+                                    manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir, ratio, backMode, l1_backsize, l2_backsize)		
             # print(command)
                                     # manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir)		
             # command = "python GNNA_main.py -loadFromTxt --dataset {} --partSize {} --dataDir {}".format(data, partsize, '/home/yuke/.graphs/orig')		 

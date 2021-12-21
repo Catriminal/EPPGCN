@@ -30,7 +30,7 @@ class ScatterAndGather(torch.autograd.Function):
 
 class GNNAFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, X, weight, inputInfo, maskInfo, backInfo, isFirstIter):
+    def forward(ctx, X, weight, inputInfo, maskInfo, backInfo, isFirstIter, isBackModeNet):
         ctx.save_for_backward(X, weight)
         ctx.inputInfo = inputInfo
         ctx.backInfo = backInfo
@@ -48,7 +48,7 @@ class GNNAFunction(torch.autograd.Function):
         # X_prime = GNNA.ours_forward(X, weight, inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index,
         #                                 inputInfo.degrees, inputInfo.partSize, maskInfo.blockx, maskInfo.blocky)[0]
         
-        if isFirstIter:
+        if isFirstIter and not isBackModeNet:
             GNNA.mask_forward(inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index, maskInfo.src_mask, maskInfo.ngh_mask,
                                 maskInfo.backEdgeMask, maskInfo.node_degs, maskInfo.layer, maskInfo.blockx, maskInfo.blocky)
 
@@ -83,7 +83,7 @@ class GNNAFunction(torch.autograd.Function):
         # print(weight_p.size())
         # d_input =  torch.mm(d_X_prime, weight.permute(1,0));
         # d_weight = torch.mm(X.permute(1,0), d_X_prime);
-        return d_input, d_weight, None, None, None, None
+        return d_input, d_weight, None, None, None, None, None
 
 class GCNConv(torch.nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -101,7 +101,7 @@ class GCNConv(torch.nn.Module):
     def clear_time(self):
         GNNA.clear_time()
 
-    def forward(self, X, inputInfo, maskInfo, backInfo, isFirstIter):
+    def forward(self, X, inputInfo, maskInfo, backInfo, isFirstIter, isBackModeNet):
         '''
         @param:
         X:  the input tensor of the graph node embedding, shape: [n_nodes, n_dim].
@@ -109,7 +109,7 @@ class GCNConv(torch.nn.Module):
         edges: the CSR edge list of the graph, shape: [edge, 1].
         partitioin: for the graph with the part-based optimziation.
         '''
-        return GNNAFunction.apply(X, self.weights, inputInfo, maskInfo, backInfo, isFirstIter)
+        return GNNAFunction.apply(X, self.weights, inputInfo, maskInfo, backInfo, isFirstIter, isBackModeNet)
 
 
 class GNNAFunction_GIN(torch.autograd.Function):

@@ -46,6 +46,8 @@ parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], defaul
 parser.add_argument("--l1_backsize", type=int, default=0, help="l1_back_part_size")
 parser.add_argument("--l2_backsize", type=int, default=0, help="l2_back_part_size")
 
+parser.add_argument("--backsize_mode", type=str, default='net', choices=['map', 'net', 'constant'], help='map or net or constant')
+
 args = parser.parse_args()
 # print()
 # print()
@@ -58,6 +60,7 @@ enable_rabbit = args.enable_rabbit == 'True'
 loadFromTxt = args.loadFromTxt == 'True'
 single_spmm = args.single_spmm == 'True'
 verify_spmm = args.verify_spmm == 'True'
+backsize_mode = args.backsize_mode
 
 # requires GPU for evaluation.
 assert torch.cuda.is_available()
@@ -136,6 +139,55 @@ l2_mask_input_prop = maskInputProperty(dataset.ngh_mask, dataset.empty_mask, dat
 l1_back_input_prop = backInputProperty(degrees=degrees, dim=args.hidden, layer=1)
 l2_back_input_prop = backInputProperty(degrees=degrees, dim=dataset.num_classes, layer=2)
 
+def mask_forward(inputInfo, maskInfo):
+    GNNA.mask_forward(inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index, maskInfo.src_mask, maskInfo.ngh_mask,
+                                maskInfo.backEdgeMask, maskInfo.node_degs, maskInfo.layer, maskInfo.blockx, maskInfo.blocky)
+
+def buildBackPart():
+    cpu_device = torch.device('cpu')
+    l1_back_input_prop.id, l1_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l1_edge_mask, inputInfo.column_index)
+    if backsize_mode == 'net':
+        l1_back_input_prop.partSize = get_net_back_part_size(l1_back_input_prop.id.to(cpu_device), 
+                l1_back_input_prop.edgeList.to(cpu_device),
+                dataset.l1_node_degs.to(cpu_device),
+                int(valid_len_tensor[0].item()),
+                args.dataset,
+                args.train_ratio,
+                1)
+    elif backsize_mode == 'map':
+        l1_back_input_prop.partSize = GNNA.get_map_back_part_size(dataset.l1_node_degs, int(valid_len_tensor[0].item()))
+    else:
+        l1_back_input_prop.partSize = args.l1_backsize
+    # print(type(num_edges))
+    # print(type(l1_back_input_prop.partSize))
+    # print(dataset.l1_node_degs)
+    l1_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l1_node_degs, num_edges, l1_back_input_prop.partSize)
+    l1_back_input_prop.numParts = int(num_parts_tensor[0].item())
+
+    l2_back_input_prop.id, l2_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l2_edge_mask, inputInfo.column_index)
+    if backsize_mode == 'net':
+        l2_back_input_prop.partSize = get_net_back_part_size(l2_back_input_prop.id.to(cpu_device), 
+                l2_back_input_prop.edgeList.to(cpu_device),
+                dataset.l2_node_degs.to(cpu_device),
+                int(valid_len_tensor[0].item()),
+                args.dataset,
+                args.train_ratio,
+                2)
+    elif backsize_mode == 'map':
+        l2_back_input_prop.partSize = GNNA.get_map_back_part_size(dataset.l2_node_degs, int(valid_len_tensor[0].item()))
+    else:
+        l2_back_input_prop.partSize = args.l2_backsize
+    l2_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l2_node_degs, num_edges, l2_back_input_prop.partSize)
+    l2_back_input_prop.numParts = int(num_parts_tensor[0].item())
+
+build_time = 0.0
+if backsize_mode == 'net':
+    mask_forward(inputInfo, l1_mask_input_prop)
+    mask_forward(inputInfo, l2_mask_input_prop)
+    start = time.perf_counter()
+    buildBackPart()
+    build_time += time.perf_counter() - start
+
 ####################################
 # Verifing a single SpMM kernel
 # against the CPU reference.
@@ -179,10 +231,10 @@ if args.model == 'gcn':
         def clear_time(self):
             self.conv1.clear_time()
 
-        def forward(self, isFirstIter):
+        def forward(self, isFirstIter, isBackModeNet):
             x = dataset.x
-            x = F.relu(self.conv1(x, inputInfo.set_input(), l1_mask_input_prop, l1_back_input_prop, isFirstIter))
-            x = self.conv2(x, inputInfo.set_hidden(), l2_mask_input_prop, l2_back_input_prop, isFirstIter)
+            x = F.relu(self.conv1(x, inputInfo.set_input(), l1_mask_input_prop, l1_back_input_prop, isFirstIter, isBackModeNet))
+            x = self.conv2(x, inputInfo.set_hidden(), l2_mask_input_prop, l2_back_input_prop, isFirstIter, isBackModeNet)
             return x
 else:
     class Net(torch.nn.Module):
@@ -213,51 +265,9 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 # Define training function.
 ####################################
 
-def buildBackPart():
-    cpu_device = torch.device('cpu')
-    l1_back_input_prop.id, l1_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l1_edge_mask, inputInfo.column_index)
-    l1_back_input_prop.partSize = get_net_back_part_size(l1_back_input_prop.id.to(cpu_device), 
-            l1_back_input_prop.edgeList.to(cpu_device),
-            dataset.l1_node_degs.to(cpu_device),
-            int(valid_len_tensor[0].item()),
-            args.dataset,
-            args.train_ratio,
-            1)
-    # print(type(num_edges))
-    # print(type(l1_back_input_prop.partSize))
-    # print(dataset.l1_node_degs)
-    l1_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l1_node_degs, num_edges, l1_back_input_prop.partSize)
-    l1_back_input_prop.numParts = int(num_parts_tensor[0].item())
-
-    l2_back_input_prop.id, l2_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l2_edge_mask, inputInfo.column_index)
-    l2_back_input_prop.partSize = get_net_back_part_size(l2_back_input_prop.id.to(cpu_device), 
-            l2_back_input_prop.edgeList.to(cpu_device),
-            dataset.l2_node_degs.to(cpu_device),
-            int(valid_len_tensor[0].item()),
-            args.dataset,
-            args.train_ratio,
-            2)
-    l2_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l2_node_degs, num_edges, l2_back_input_prop.partSize)
-    l2_back_input_prop.numParts = int(num_parts_tensor[0].item())
-
-    # l1_back_input_prop.id, l1_back_input_prop.edgeList, l1_back_input_prop.partPointer, l1_back_info = \
-    #     GNNA.build_back_part(dataset.l1_edge_mask, inputInfo.column_index, dataset.l1_node_degs, args.l1_backsize, l1_back_input_prop.dim)
-    # l1_back_input_prop.partSize = int(l1_back_info[0].item())
-    # l1_back_input_prop.numParts = int(l1_back_info[1].item())
-    # # l1_back_input_prop.reorder(num_nodes)
-
-    # l2_back_input_prop.id, l2_back_input_prop.edgeList, l2_back_input_prop.partPointer, l2_back_info = \
-    #     GNNA.build_back_part(dataset.l2_edge_mask, inputInfo.column_index, dataset.l2_node_degs, args.l2_backsize, l2_back_input_prop.dim)
-
-    # l2_back_input_prop.partSize = int(l2_back_info[0].item())
-    # l2_back_input_prop.numParts = int(l2_back_info[1].item())
-    # # l2_back_input_prop.reorder(num_nodes)
-    # # print("build back part.")
-
 for_time = 0.0
 loss_time = 0.0
 back_time = 0.0
-build_time = 0.0
 other_time = 0.0
 
 def train(isFirstIter):
@@ -276,11 +286,11 @@ def train(isFirstIter):
 
     # torch.cuda.synchronize()
     start = time.perf_counter()
-    x = model(isFirstIter)
+    x = model(isFirstIter, backsize_mode == 'net')
     torch.cuda.synchronize()
     for_time += time.perf_counter() - start
 
-    if(isFirstIter):
+    if(isFirstIter and backsize_mode != 'net'):
         start = time.perf_counter()
         buildBackPart()
         build_time += time.perf_counter() - start
