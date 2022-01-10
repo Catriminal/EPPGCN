@@ -65,7 +65,7 @@ backsize_mode = args.backsize_mode
 # requires GPU for evaluation.
 assert torch.cuda.is_available()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-torch.cuda.set_device(0)
+torch.cuda.set_device(1)
 
 ####################################
 # loading data from files
@@ -182,9 +182,9 @@ def buildBackPart():
 
 build_time = 0.0
 if backsize_mode == 'net':
+    start = time.perf_counter()
     mask_forward(inputInfo, l1_mask_input_prop)
     mask_forward(inputInfo, l2_mask_input_prop)
-    start = time.perf_counter()
     buildBackPart()
     build_time += time.perf_counter() - start
 
