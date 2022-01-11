@@ -159,7 +159,7 @@ def buildBackPart():
     else:
         l1_back_input_prop.partSize = args.l1_backsize
     # print(type(num_edges))
-    # print(type(l1_back_input_prop.partSize))
+    # print(l1_back_input_prop.partSize)
     # print(dataset.l1_node_degs)
     l1_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l1_node_degs, num_edges, l1_back_input_prop.partSize)
     l1_back_input_prop.numParts = int(num_parts_tensor[0].item())

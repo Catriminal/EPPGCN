@@ -1,6 +1,7 @@
 #include <torch/extension.h>
 #include <vector>
 #include <string>
+#include <cmath>
 using namespace std;
 torch::Tensor SAG_cuda(
     torch::Tensor input,
@@ -448,21 +449,26 @@ int get_map_back_part_size(
     torch::Tensor node_deg,
     int valid_len
   ) {
-  int back_part_size = 0;
   int num_nodes = node_deg.size(0);
   int valid_node = compact_count(node_deg.data_ptr<int>(), num_nodes, 1024);
-  int valid_degree = valid_len / valid_node;
-  if(valid_degree < 4) {
-    back_part_size = 4;
-  } else if(valid_degree >= 4 && valid_degree < 16) {
-    back_part_size = 8;
-  } else if(valid_degree >= 16 && valid_degree < 64) {
-    back_part_size = 16;
-  } else if(valid_degree >= 64 && valid_degree < 256) {
-    back_part_size = 32;
-  } else if(valid_degree >= 256 && valid_degree < 512) {
-    back_part_size = 64;
-  }
+  double valid_degree = 1.0 * valid_len / valid_node;
+  double beta0 = 0.65538;
+  double beta1 = 1.67431e-5;
+  double beta2 = -2.24342e-6;
+  double beta3 = 0.63641;
+  int back_part_size = round(beta0 + beta1 * valid_node + beta2 * valid_len + beta3 * valid_degree);
+  // if(valid_degree < 4) {
+  //   back_part_size = 4;
+  // } else if(valid_degree >= 4 && valid_degree < 16) {
+  //   back_part_size = 8;
+  // } else if(valid_degree >= 16 && valid_degree < 64) {
+  //   back_part_size = 16;
+  // } else if(valid_degree >= 64 && valid_degree < 256) {
+  //   back_part_size = 32;
+  // } else if(valid_degree >= 256 && valid_degree < 512) {
+  //   back_part_size = 64;
+  // }
+  // printf("back_part_size: %d\n", back_part_size);
 
   return back_part_size;
 }
