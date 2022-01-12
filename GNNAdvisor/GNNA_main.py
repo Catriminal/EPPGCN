@@ -23,6 +23,7 @@ parser.add_argument("--dataset", type=str, default='amazon0601', help="dataset")
 parser.add_argument("--dim", type=int, default=96, help="input embedding dimension size")
 parser.add_argument("--hidden", type=int, default=16, help="hidden dimension size")
 parser.add_argument("--classes", type=int, default=22, help="output classes size")
+parser.add_argument("--layers", type=int, default=2, help="number of layers")
 parser.add_argument("--train_ratio", type=float, default=0.0, help="train mask ratio")
 
 # Model training related parameters.
@@ -43,15 +44,16 @@ parser.add_argument('--loadFromTxt', type=str, choices=['True', 'False'], defaul
 parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], default='False', help="True: profile the single SpMM (neighbor aggregation) kernel for number epoches times")
 parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], default='False', help="True: verify the output correctness of a single SpMM (neighbor aggregation) kernel against the CPU reference implementation.")
 
-parser.add_argument("--l1_backsize", type=int, default=0, help="l1_back_part_size")
-parser.add_argument("--l2_backsize", type=int, default=0, help="l2_back_part_size")
+parser.add_argument("--backsize", type=int, default=0, help="backward part size of all layers")
+# parser.add_argument("--l1_backsize", type=int, default=0, help="l1_back_part_size")
+# parser.add_argument("--l2_backsize", type=int, default=0, help="l2_back_part_size")
 
 parser.add_argument("--backsize_mode", type=str, default='net', choices=['map', 'net', 'constant'], help='map or net or constant')
 
 args = parser.parse_args()
 # print()
 # print()
-print("||" + args.dataset + "   " + str(args.train_ratio))
+print("||" + args.dataset + "   " + str(args.train_ratio) + "   " + str(args.layers))
 
 partSize, dimWorker, warpPerBlock, sharedMem = args.partSize, args.dimWorker, args.warpPerBlock, args.sharedMem
 manual_mode = args.manual_mode == 'True'
@@ -72,10 +74,10 @@ torch.cuda.set_device(1)
 ####################################
 if loadFromTxt:
     path = osp.join(args.dataDir, args.dataset + "_snap")
-    dataset = custom_dataset(path, args.dataDir, args.train_ratio, args.dim, args.classes, load_from_txt=True, verbose=verbose_mode)
+    dataset = custom_dataset(path, args.dataDir, args.train_ratio, args.dim, args.classes, args.layers, load_from_txt=True, verbose=verbose_mode)
 else:
     path = osp.join(args.dataDir, args.dataset+".npz")
-    dataset = custom_dataset(path, args.dataDir, args.train_ratio, args.dim, args.classes, load_from_txt=False, verbose=verbose_mode)
+    dataset = custom_dataset(path, args.dataDir, args.train_ratio, args.dim, args.classes, args.layers, load_from_txt=False, verbose=verbose_mode)
 
 num_nodes = dataset.num_nodes
 num_edges = dataset.num_edges
@@ -131,60 +133,51 @@ inputInfo.column_index  = inputInfo.column_index.to(device)
 inputInfo.partPtr = partPtr.int().to(device)
 inputInfo.part2Node  = part2Node.int().to(device)
 
-l1_mask_input_prop = maskInputProperty(dataset.train_mask, dataset.ngh_mask, dataset.l2_edge_mask,
-                                    dataset.l2_node_degs, 1, args.hidden)
-l2_mask_input_prop = maskInputProperty(dataset.ngh_mask, dataset.empty_mask, dataset.l1_edge_mask, dataset.l1_node_degs,
-                                    2, dataset.num_classes)
+mask_input_props = []
+for i in range(0, args.layers):
+    src_mask = dataset.ngh_masks[i - 1] if i != 0 else dataset.train_mask
+    dst_mask = dataset.ngh_masks[i] if i < args.layers - 1 else dataset.empty_mask
+    back_edge_mask = dataset.edge_masks[args.layers - 1 - i]
+    node_deg = dataset.node_degs[args.layers - 1 - i]
+    layer = i + 1
+    dim = args.hidden if i < args.layers - 1 else dataset.num_classes
 
-l1_back_input_prop = backInputProperty(degrees=degrees, dim=args.hidden, layer=1)
-l2_back_input_prop = backInputProperty(degrees=degrees, dim=dataset.num_classes, layer=2)
+    mask_input_props.append(maskInputProperty(src_mask, dst_mask, back_edge_mask, node_deg, args.layers, layer, dim))
+
+back_input_props = []
+for i in range(0, args.layers):
+    dim = args.hidden if i < args.layers - 1 else dataset.num_classes
+    layer = i + 1
+    back_input_props.append(backInputProperty(degrees=degrees, dim=dim, layer=layer))
 
 def mask_forward(inputInfo, maskInfo):
     GNNA.mask_forward(inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index, maskInfo.src_mask, maskInfo.ngh_mask,
-                                maskInfo.backEdgeMask, maskInfo.node_degs, maskInfo.layer, maskInfo.blockx, maskInfo.blocky)
+                                maskInfo.backEdgeMask, maskInfo.node_degs, maskInfo.num_layers, maskInfo.layer, maskInfo.blockx, maskInfo.blocky)
 
 def buildBackPart():
     cpu_device = torch.device('cpu')
-    l1_back_input_prop.id, l1_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l1_edge_mask, inputInfo.column_index)
-    if backsize_mode == 'net':
-        l1_back_input_prop.partSize = get_net_back_part_size(l1_back_input_prop.id.to(cpu_device), 
-                l1_back_input_prop.edgeList.to(cpu_device),
-                dataset.l1_node_degs.to(cpu_device),
-                int(valid_len_tensor[0].item()),
-                args.dataset,
-                args.train_ratio,
-                1)
-    elif backsize_mode == 'map':
-        l1_back_input_prop.partSize = GNNA.get_map_back_part_size(dataset.l1_node_degs, int(valid_len_tensor[0].item()))
-    else:
-        l1_back_input_prop.partSize = args.l1_backsize
-    # print(type(num_edges))
-    # print(l1_back_input_prop.partSize)
-    # print(dataset.l1_node_degs)
-    l1_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l1_node_degs, num_edges, l1_back_input_prop.partSize)
-    l1_back_input_prop.numParts = int(num_parts_tensor[0].item())
-
-    l2_back_input_prop.id, l2_back_input_prop.edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.l2_edge_mask, inputInfo.column_index)
-    if backsize_mode == 'net':
-        l2_back_input_prop.partSize = get_net_back_part_size(l2_back_input_prop.id.to(cpu_device), 
-                l2_back_input_prop.edgeList.to(cpu_device),
-                dataset.l2_node_degs.to(cpu_device),
-                int(valid_len_tensor[0].item()),
-                args.dataset,
-                args.train_ratio,
-                2)
-    elif backsize_mode == 'map':
-        l2_back_input_prop.partSize = GNNA.get_map_back_part_size(dataset.l2_node_degs, int(valid_len_tensor[0].item()))
-    else:
-        l2_back_input_prop.partSize = args.l2_backsize
-    l2_back_input_prop.partPointer, num_parts_tensor = GNNA.split_back_part(dataset.l2_node_degs, num_edges, l2_back_input_prop.partSize)
-    l2_back_input_prop.numParts = int(num_parts_tensor[0].item())
+    for i in range(0, args.layers):
+        id, edgeList, valid_len_tensor = GNNA.compact_back_edge(dataset.edge_masks[i], inputInfo.column_index)
+        partSize = 0
+        if backsize_mode == 'net':
+            partSize = get_net_back_part_size(id.to(cpu_device), edgeList.to(cpu_device),
+                    dataset.node_degs[i].to(cpu_device),
+                    int(valid_len_tensor[0].item()),
+                    args.dataset,
+                    args.train_ratio,
+                    i + 1)
+        elif backsize_mode == 'map':
+            partSize = GNNA.get_map_back_part_size(dataset.node_degs[i], int(valid_len_tensor[0].item()))
+        else:
+            partSize = args.backsize
+        partPointer, num_parts_tensor = GNNA.split_back_part(dataset.node_degs[i], num_edges, partSize)
+        back_input_props[i].fillProperty(id, partPointer, edgeList, partSize, int(num_parts_tensor[0].item()))
 
 build_time = 0.0
 if backsize_mode == 'net':
     start = time.perf_counter()
-    mask_forward(inputInfo, l1_mask_input_prop)
-    mask_forward(inputInfo, l2_mask_input_prop)
+    for i in range(0, args.layers):
+        mask_forward(inputInfo, mask_input_props[i])
     buildBackPart()
     build_time += time.perf_counter() - start
 
@@ -220,21 +213,30 @@ if single_spmm:
 ####################################
 if args.model == 'gcn':
     class Net(torch.nn.Module):
-        def __init__(self):
+        def __init__(self, num_layers):
             super(Net, self).__init__()
-            self.conv1 = GCNConv(dataset.num_features, args.hidden)
-            self.conv2 = GCNConv(args.hidden, dataset.num_classes)
+            self.num_layers = num_layers
+            self.convs = torch.nn.ModuleList()
+            for i in range(0, num_layers):
+                input_dim = args.hidden if i != 0 else dataset.num_features
+                output_dim = args.hidden if i < num_layers - 1 else dataset.num_classes
+                self.convs.append(GCNConv(input_dim, output_dim))
         
         def print_time(self):
-            self.conv1.print_time() # static method. only can count l1+l2 agg time
+            self.convs[0].print_time() # static method.
             
         def clear_time(self):
-            self.conv1.clear_time()
+            self.convs[0].clear_time() # static method.
 
         def forward(self, isFirstIter, isBackModeNet):
             x = dataset.x
-            x = F.relu(self.conv1(x, inputInfo.set_input(), l1_mask_input_prop, l1_back_input_prop, isFirstIter, isBackModeNet))
-            x = self.conv2(x, inputInfo.set_hidden(), l2_mask_input_prop, l2_back_input_prop, isFirstIter, isBackModeNet)
+            for i in range(0, self.num_layers):
+                if i == 0:
+                    x = F.relu(self.convs[i](x, inputInfo.set_input(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet))
+                elif i < self.num_layers - 1:
+                    x = F.relu(self.convs[i](x, inputInfo.set_hidden(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet))
+                else:
+                    x = self.convs[i](x, inputInfo.set_hidden(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet)
             return x
 else:
     class Net(torch.nn.Module):
@@ -255,7 +257,7 @@ else:
             x = self.conv5(x, inputInfo.set_hidden())
             return F.log_softmax(x, dim=1)
 
-model, dataset = Net().to(device), dataset.to(device)
+model, dataset = Net(args.layers).to(device), dataset.to(device)
 if verbose_mode:
     print(model)
 

@@ -50,7 +50,7 @@ class GNNAFunction(torch.autograd.Function):
         
         if isFirstIter and not isBackModeNet:
             GNNA.mask_forward(inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index, maskInfo.src_mask, maskInfo.ngh_mask,
-                                maskInfo.backEdgeMask, maskInfo.node_degs, maskInfo.layer, maskInfo.blockx, maskInfo.blocky)
+                                maskInfo.backEdgeMask, maskInfo.node_degs, maskInfo.num_layers, maskInfo.layer, maskInfo.blockx, maskInfo.blocky)
 
         return X_prime
 

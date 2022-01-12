@@ -63,6 +63,7 @@ void mask_forward_cuda(
     torch::Tensor ngh_mask,
     torch::Tensor backEdgeMask,
     torch::Tensor node_degs,
+    int num_layers,
     int layer,
     int blockx, 
     int blocky
@@ -231,6 +232,7 @@ void mask_forward(
     torch::Tensor ngh_mask,
     torch::Tensor backEdgeMask,
     torch::Tensor node_degs,
+    int num_layers,
     int layer,
     int blockx, 
     int blocky
@@ -244,7 +246,7 @@ void mask_forward(
   CHECK_INPUT(node_degs);
 
   mask_forward_cuda(id, partPointer, edgeList, src_mask, ngh_mask, 
-                            backEdgeMask, node_degs, layer, blockx, blocky);
+                            backEdgeMask, node_degs, num_layers, layer, blockx, blocky);
 }
 
 std::vector<torch::Tensor> ours_backward(
@@ -451,6 +453,7 @@ int get_map_back_part_size(
   ) {
   int num_nodes = node_deg.size(0);
   int valid_node = compact_count(node_deg.data_ptr<int>(), num_nodes, 1024);
+  // printf("valid_node: %d, valid_len: %d\n", valid_node, valid_len);
   double valid_degree = 1.0 * valid_len / valid_node;
   double beta0 = 0.65538;
   double beta1 = 1.67431e-5;

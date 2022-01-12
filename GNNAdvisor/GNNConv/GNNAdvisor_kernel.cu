@@ -301,8 +301,7 @@ __global__ void SAG_cuda_kernel(
 
 float for_sum_time = 0.0;
 float for_com_time = 0.0;
-float l1_back_sum_time = 0.0;
-float l2_back_sum_time = 0.0;
+float layer_back_sum_times[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 float back_sum_time = 0.0;
 float back_com_time = 0.0;
 float mask_time = 0.0;
@@ -313,8 +312,9 @@ void print_time() {
     // printf("for_com_time: %.6f\n", for_com_time / 1000);
     printf("back_agg_time: %.6f\n", back_sum_time / 1000);
     // printf("back_com_time: %.6f\n", back_com_time / 1000);
-    printf("l1_back_agg_time: %.6f\n", l1_back_sum_time / 1000);
-    printf("l2_back_agg_time: %.6f\n", l2_back_sum_time / 1000);
+    for(int i = 0; i < 6 && layer_back_sum_times[i] != 0.0; i++) {
+        printf("l%d_back_agg_time: %.6f\n", i + 1, layer_back_sum_times[i] / 1000);
+    }
     printf("mask_time: %.6f\n", mask_time / 1000);
 }
 
@@ -323,8 +323,9 @@ void clear_time() {
     for_com_time = 0.0;
     back_sum_time = 0.0;
     back_com_time = 0.0;
-    l1_back_sum_time = 0.0;
-    l2_back_sum_time = 0.0;
+    for(int i = 0; i < 6; i++) {
+        layer_back_sum_times[i] = 0.0;
+    }
 }
 
 ////////////////////////////////////////////
@@ -580,6 +581,7 @@ void mask_forward_cuda(
     torch::Tensor ngh_mask,
     torch::Tensor backEdgeMask,
     torch::Tensor node_degs,
+    int num_layers,
     int layer,
     int blockx, 
     int blocky
@@ -605,7 +607,7 @@ void mask_forward_cuda(
                             backEdgeMask.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
                             node_degs.packed_accessor32<int,1,torch::RestrictPtrTraits>(),
                             num_parts,
-                            layer == 2
+                            layer == num_layers
                         );
                     }));
     
@@ -914,11 +916,7 @@ std::vector<torch::Tensor> ours_backward_cuda(
     // cudaEventDestroy(start);
     // cudaEventDestroy(stop);
     back_sum_time += time;
-    if(layer == 1) {
-        l1_back_sum_time += time;
-    } else if(layer == 2) {
-        l2_back_sum_time += time;
-    }
+    layer_back_sum_times[layer - 1] += time;
     // std::cout << "after backward kernel" << std::endl;
     // check for error
     cudaError_t error = cudaGetLastError();

@@ -252,11 +252,12 @@ class inputProperty(object):
                     print("# auto HIDDEN reorder_flag: {}".format(self.reorder_status))
 
 class maskInputProperty(object):
-    def __init__(self, src_mask=None, ngh_mask=None, backEdgeMask=None, node_degs=None, layer=None, dim=None):
+    def __init__(self, src_mask=None, ngh_mask=None, backEdgeMask=None, node_degs=None, num_layers=None, layer=None, dim=None):
         self.src_mask = src_mask
         self.ngh_mask = ngh_mask
         self.backEdgeMask = backEdgeMask
         self.node_degs = node_degs
+        self.num_layers = num_layers
         self.layer = layer
         self.blockx, self.blocky = getBlockSize(dim)
         self.dim = dim
@@ -273,6 +274,13 @@ class backInputProperty(object):
         self.dim = dim
         self.layer = layer
         self.blockx, self.blocky = getBlockSize(dim)
+    
+    def fillProperty(self, id=None, partPointer=None, edgeList=None, partSize=None, numParts=None):
+        self.id = id
+        self.partPointer = partPointer
+        self.edgeList = edgeList
+        self.partSize = partSize
+        self.numParts = numParts
 
     def reorder(self, numNodes):
         trans_time = 0.0

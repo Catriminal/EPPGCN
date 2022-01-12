@@ -21,7 +21,7 @@ class custom_dataset(torch.nn.Module):
     """
     data loading for more graphs
     """
-    def __init__(self, path, dataPath, ratio, dim, num_class, load_from_txt=True, verbose=False):
+    def __init__(self, path, dataPath, ratio, dim, num_class, num_layer, load_from_txt=True, verbose=False):
         super(custom_dataset, self).__init__()
 
         self.nodes = set()
@@ -30,6 +30,7 @@ class custom_dataset(torch.nn.Module):
         self.num_nodes = 0
         self.num_features = dim 
         self.num_classes = num_class
+        self.num_layers = num_layer
         self.edge_index = None
         
         self.reorder_flag = False
@@ -49,7 +50,7 @@ class custom_dataset(torch.nn.Module):
         else:
             self.train_mask = np.genfromtxt(dataPath + '/train_mask_' + str(ratio), delimiter='\n')
 
-        self.init_masks()
+        self.init_masks(num_layer)
 
     def init_edges(self, path):
         self.g = dgl.DGLGraph()
@@ -134,7 +135,7 @@ class custom_dataset(torch.nn.Module):
         '''
         self.y = torch.ones(self.num_nodes).long().cuda()
 
-    def init_masks(self):
+    def init_masks(self, num_layers):
         val = 0.3
         test = 0.1
         self.val_mask = [1] * int(self.num_nodes * val)+ [0] * (self.num_nodes  - int(self.num_nodes * val))
@@ -143,18 +144,19 @@ class custom_dataset(torch.nn.Module):
         self.val_mask = torch.BoolTensor(self.val_mask).cuda()
         self.test_mask = torch.BoolTensor(self.test_mask).cuda()
 
-        self.ngh_mask = [0] * int(self.num_nodes)
+        self.ngh_masks = []
+        for i in range(0, num_layers - 1):
+            self.ngh_masks.append([0] * int(self.num_nodes))
+            self.ngh_masks[i] = torch.BoolTensor(self.ngh_masks[i]).cuda()
         self.empty_mask = []
-        self.l1_edge_mask = [-1] * int(self.num_edges)
-        self.l2_edge_mask = [-1] * int(self.num_edges)
-        self.l1_node_degs = [0] * int(self.num_nodes)
-        self.l2_node_degs = [0] * int(self.num_nodes)
-        self.ngh_mask = torch.BoolTensor(self.ngh_mask).cuda()
         self.empty_mask = torch.BoolTensor(self.empty_mask).cuda()
-        self.l1_edge_mask = torch.IntTensor(self.l1_edge_mask).cuda()
-        self.l2_edge_mask = torch.IntTensor(self.l2_edge_mask).cuda()
-        self.l1_node_degs = torch.IntTensor(self.l1_node_degs).cuda()
-        self.l2_node_degs = torch.IntTensor(self.l2_node_degs).cuda()
+        self.edge_masks = []
+        self.node_degs = []
+        for i in range(0, num_layers):
+            self.edge_masks.append([-1] * int(self.num_edges))
+            self.edge_masks[i] = torch.IntTensor(self.edge_masks[i]).cuda()
+            self.node_degs.append([0] * int(self.num_nodes))
+            self.node_degs[i] = torch.IntTensor(self.node_degs[i]).cuda()
 
     def rabbit_reorder(self):
         '''
