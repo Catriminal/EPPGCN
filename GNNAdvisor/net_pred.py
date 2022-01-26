@@ -40,33 +40,7 @@ def net_pred(id, edge_list, node_deg, valid_len, key):
     
     # local_start = time.perf_counter()
     ginfo = GNNA.get_ginfo(node_deg, valid_len)
-    # valid_node = 0
-    # ginfo = np.zeros(10)
-    # for deg in x:
-    #     if deg != 0:
-    #         valid_node += 1
-    #     if deg >= 1 and deg < 5:
-    #         ginfo[3] += 1
-    #     elif deg >= 5 and deg < 10:
-    #         ginfo[4] += 1
-    #     elif deg >= 10 and deg < 20:
-    #         ginfo[5] += 1
-    #     elif deg >= 20 and deg < 40:
-    #         ginfo[6] += 1
-    #     elif deg >= 40 and deg < 80:
-    #         ginfo[7] += 1
-    #     elif deg >= 80 and deg < 160:
-    #         ginfo[8] += 1
-    #     else:
-    #         ginfo[9] += 1
-    
-    # ginfo[0] = valid_node * 1.0 / 10000
-    # ginfo[1] = valid_len * 1.0 / 10000
-    # ginfo[2] = 1.0 * valid_len / valid_node
-    # for i in range(3, 10):
-    #     ginfo[i] = ginfo[i] * 1.0 / valid_node
-    # ginfo = torch.from_numpy(ginfo).float()
-    # print("ginfo: {:.6f}".format(time.perf_counter() - local_start))
+
     # print(edge_index)
     # print(x)
     # print(y)

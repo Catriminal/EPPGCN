@@ -45,8 +45,6 @@ class GNNAFunction(torch.autograd.Function):
         X_prime = GNNA.forward(X, weight, inputInfo.row_pointers, inputInfo.column_index, 
                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
                                 inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)[0]
-        # X_prime = GNNA.ours_forward(X, weight, inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index,
-        #                                 inputInfo.degrees, inputInfo.partSize, maskInfo.blockx, maskInfo.blocky)[0]
         
         if isFirstIter and not isBackModeNet:
             GNNA.mask_forward(inputInfo.part2Node, inputInfo.partPtr, inputInfo.column_index, maskInfo.src_mask, maskInfo.ngh_mask,
@@ -54,35 +52,14 @@ class GNNAFunction(torch.autograd.Function):
 
         return X_prime
 
-        # print(X.size())
-        # print(weight.size())
-        # X_prime = torch.mm(X, weight)
-        # X_prime = GNNA.SAG(X_prime, inputInfo.row_pointers, inputInfo.column_index, 
-        #                     inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
-        #                         inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
-
     @staticmethod
     def backward(ctx, d_output):
         X, weight = ctx.saved_tensors
         backInfo = ctx.backInfo
-        # print("[Backward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,         
-        #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
 
-        # print("[Backward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
-        #                                                     ctx.dimWorker, ctx.warpPerBlock))
-        # print("before backward.")
         d_input, d_weight = GNNA.ours_backward(d_output, X, weight, backInfo.id, backInfo.partPointer, 
                                         backInfo.edgeList, backInfo.degrees,
                                         backInfo.partSize, backInfo.numParts, backInfo.layer, backInfo.blockx, backInfo.blocky)
-        # print("after backward.")
-        # d_X_prime = GNNA.SAG(d_output, inputInfo.row_pointers, inputInfo.column_index, 
-        #                             inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
-        #                                 inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
-        # print(weight.size())
-        # weight_p = weight.permute(1,0)
-        # print(weight_p.size())
-        # d_input =  torch.mm(d_X_prime, weight.permute(1,0));
-        # d_weight = torch.mm(X.permute(1,0), d_X_prime);
         return d_input, d_weight, None, None, None, None, None
 
 class GCNConv(torch.nn.Module):

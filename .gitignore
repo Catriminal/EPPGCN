@@ -12,8 +12,6 @@ osdi-ae-graphs/*
 *.egg-info
 *.vscode
 *.tar.gz
-osdi-ae-graphs-mtx/*
-osdi-ae-graphs-mtx.tar.gz
 *.log
 *.csv
 cmake-3.16.5
@@ -21,4 +19,3 @@ cmake-3.16.5
 GNNAdvisor/nvprof*_re/*
 GNNAdvisor/nvprof_hit_re/*
 GNNAdvisor/*.txt
-GNNAdvisor/net_pred_part_size

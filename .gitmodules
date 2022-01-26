@@ -1,3 +1,0 @@
-[submodule "Gunrock/gunrock"]
-	path = Gunrock/gunrock
-	url = git@github.com:gunrock/gunrock.git

@@ -24,7 +24,7 @@ parser.add_argument("--dim", type=int, default=96, help="input embedding dimensi
 parser.add_argument("--hidden", type=int, default=16, help="hidden dimension size")
 parser.add_argument("--classes", type=int, default=22, help="output classes size")
 parser.add_argument("--layers", type=int, default=2, help="number of layers")
-parser.add_argument("--train_ratio", type=float, default=0.0, help="train mask ratio")
+parser.add_argument("--train_ratio", type=float, default=0.1, help="train mask ratio")
 
 # Model training related parameters.
 parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gin'],  help="GCN or GIN")
