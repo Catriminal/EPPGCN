@@ -8,7 +8,7 @@ git clone https://github.com/Catriminal/GNNAdvisor.git
 ```
 
 + **Hardware**: 
-> + `CPU x86_64` with host memory >= 32GB. (Tested on Intel Xeon Silver 4110 (8-core 16-thread)  CPU  with 64GB host memory).
+> + `CPU x86_64` with host memory >= 32GB. (Tested on Intel Xeon E5-2680 v4 (14-core 28-thread)  CPU  with 256 GB host memory).
 > + `NVIDIA GPU (arch>=sm_60)` with device memory >= 16GB. Tested on NVIDIA Tesla P100(`sm_60`). 
 
 + **OS & Compiler**: 
