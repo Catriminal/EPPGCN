@@ -109,7 +109,7 @@ pip install torch-geometric
 >
 > + `./bench_EPPGCN.py --groupsize_model []`  to run our system 2-layer GCN model and report 100 epoch runtime for all evaluated datasets.
 >
-> + Set parameters `--groupsize_model`  to choose different ways to decide `groupsize` in backward process. There are three options for this parameter: `regression_equation`, `SAGPG` and `fixed_value`. `regression_equation` uses a linear regression equation, `SAGPG` uses a trained neural network and `fixed_value` uses a fixed constant of 32.
+> + Set parameters `--groupsize_model`  to choose different ways to decide `groupsize` in backward process. There are three options for this parameter: `regression_equation`, `SAGPG` and `fixed_value`. `regression_equation` uses a linear regression equation, `SAGPG` uses a pre-trained neural network and `fixed_value` uses a fixed constant of 32.
 >
 > +  Stand alone running `GNNA_main.py` with specified parameters.
 > > + `--dataset`: the name of the dataset.
