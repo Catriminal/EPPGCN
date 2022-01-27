@@ -8,7 +8,7 @@ classes=(7 6 3 47 22 32 32 32 32 32)
 # classes=(7 47)
 ratios=(0.1 0.3 0.5 0.8)
 # ratios=(0.8)
-gnnad="/home/yc/OSDI21_AE-master/GNNAdvisor/GNNA_main.py"
+gnnad="/home/yc/OSDI21_AE-master/GNNAdvisor/gcn_main.py"
 # dataset
 # dim
 # classes

@@ -12,7 +12,7 @@ classes=(7 6 3 47 22 32 32 32 32 32)
 # net part size
 l1_sizes=(2 2 2 2 2 2 2 2 5 7 7 7 10 6 6 6 6 6 4 4 7 7 7 7 11 11 21 27 11 11 27 16 6 6 6 6 7 7 7 7)
 l2_sizes=(1 2 2 2 1 1 2 2 1 3 5 7 8 7 10 10 9 7 6 6 1 3 5 7 11 11 11 21 11 11 11 27 8 10 6 6 1 3 5 7)
-add="/home/yc/OSDI21_AE-master/GNNAdvisor/GNNA_main.py"
+add="/home/yc/OSDI21_AE-master/GNNAdvisor/gcn_main.py"
 nvprof="/usr/local/cuda-10.1/bin/nvprof"
 python="/home/yc/anaconda3/envs/gnnad/bin/python"
 data_home="/home/yc/data_scale_test/"

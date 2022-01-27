@@ -4,7 +4,7 @@
 
 + **Clone this project**
 ```shell
-git clone https://github.com/Catriminal/GNNAdvisor.git
+git clone https://github.com/Catriminal/EPPGCN.git
 ```
 
 + **Hardware**: 
@@ -58,12 +58,34 @@ pip install torch-geometric
 
 ### **Step-2: Download the graph datasets.**
 + The graph data files we used can all be found in the references of the paper.
-+ The format of the graph data file should be SNAP, using '\t' as a separator for each row of vertex ids.
-+ We use mask to represent the training set. The format of the mask file should be a text file consisting of 0s and 1s, with the number of lines equal to the number of vertices of the graph.
+
++ The format of the graph data file should be SNAP, using '\t' as a separator for each row of vertex ids. Take cora as an example:
+
+  ```
+  0	0
+  0	633
+  0	1862
+  0	2582
+  1	1
+  1	2
+  ...
+  ```
+
++ We use mask to represent the training set. The format of the mask file should be a text file consisting of 0s and 1s, with the number of lines equal to the number of vertices of the graph. Take cora as an example:
+
+  ```
+  0
+  1
+  1
+  0
+  0
+  ...
+  ```
+
 + Note the modification of the data storage path in `bench_EPPGCN.py`.
 + Note that node inital embeeding is not included, and we generate an all 1s embeeding matrix according to users `input dimension` parameter at the runtime for just performance evaluation.
 
-## 3. Detailed Instructions.
+## 2. Detailed Instructions.
 
 + **GNN Model Setting**.
 > + **GCN (multi-layer with 16 hidden dimension)**
@@ -111,7 +133,7 @@ pip install torch-geometric
 >
 > + Set parameters `--groupsize_model`  to choose different ways to decide `groupsize` in backward process. There are three options for this parameter: `regression_equation`, `SAGPG` and `fixed_value`. `regression_equation` uses a linear regression equation, `SAGPG` uses a pre-trained neural network and `fixed_value` uses a fixed constant of 32.
 >
-> +  Stand alone running `GNNA_main.py` with specified parameters.
+> +  Stand alone running `gcn_main.py` with specified parameters.
 > > + `--dataset`: the name of the dataset.
 > > + `--dim`: the size of input embedding dimension, default: 96.
 > > + `--hidden`: the size of hidden dimension, default: 16.

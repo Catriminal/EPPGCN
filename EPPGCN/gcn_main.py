@@ -175,81 +175,37 @@ if backsize_mode == 'net':
     buildBackPart()
     build_time += time.perf_counter() - start
 
-####################################
-# Verifing a single SpMM kernel
-# against the CPU reference.
-####################################
-if verify_spmm:
-    from unitest import *
-    valid = Verification(args.hidden, \
-                        inputInfo.row_pointers, inputInfo.column_index, degrees, \
-                        inputInfo.partPtr, inputInfo.part2Node, \
-                        partSize, dimWorker, warpPerBlock)
-    valid.compute()
-    valid.reference(dataset.edge_index, dataset.val, dataset.num_nodes)
-    valid.compare()
-    sys.exit(0)
 
 ####################################
-# Profiling a single SpMM kernel
+# Building GCN model
 ####################################
-if single_spmm:
-    from unitest import *
-    valid = Verification(args.hidden, \
-                        inputInfo.row_pointers, inputInfo.column_index, degrees, \
-                        inputInfo.partPtr, inputInfo.part2Node, \
-                        partSize, dimWorker, warpPerBlock)
-    valid.profile_spmm(round=args.num_epoches)
-    sys.exit(0)
 
-####################################
-# Building GNN model
-####################################
-if args.model == 'gcn':
-    class Net(torch.nn.Module):
-        def __init__(self, num_layers):
-            super(Net, self).__init__()
-            self.num_layers = num_layers
-            self.convs = torch.nn.ModuleList()
-            for i in range(0, num_layers):
-                input_dim = args.hidden if i != 0 else dataset.num_features
-                output_dim = args.hidden if i < num_layers - 1 else dataset.num_classes
-                self.convs.append(GCNConv(input_dim, output_dim))
+class Net(torch.nn.Module):
+    def __init__(self, num_layers):
+        super(Net, self).__init__()
+        self.num_layers = num_layers
+        self.convs = torch.nn.ModuleList()
+        for i in range(0, num_layers):
+            input_dim = args.hidden if i != 0 else dataset.num_features
+            output_dim = args.hidden if i < num_layers - 1 else dataset.num_classes
+            self.convs.append(GCNConv(input_dim, output_dim))
+    
+    def print_time(self):
+        self.convs[0].print_time() # static method.
         
-        def print_time(self):
-            self.convs[0].print_time() # static method.
-            
-        def clear_time(self):
-            self.convs[0].clear_time() # static method.
+    def clear_time(self):
+        self.convs[0].clear_time() # static method.
 
-        def forward(self, isFirstIter, isBackModeNet):
-            x = dataset.x
-            for i in range(0, self.num_layers):
-                if i == 0:
-                    x = F.relu(self.convs[i](x, inputInfo.set_input(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet))
-                elif i < self.num_layers - 1:
-                    x = F.relu(self.convs[i](x, inputInfo.set_hidden(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet))
-                else:
-                    x = self.convs[i](x, inputInfo.set_hidden(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet)
-            return x
-else:
-    class Net(torch.nn.Module):
-        def __init__(self):
-            super(Net, self).__init__()
-            self.conv1 = GINConv(dataset.num_features, args.hidden)
-            self.conv2 = GINConv(args.hidden, args.hidden)
-            self.conv3 = GINConv(args.hidden, args.hidden)
-            self.conv4 = GINConv(args.hidden, args.hidden)
-            self.conv5 = GINConv(args.hidden, dataset.num_classes)
-
-        def forward(self):
-            x = dataset.x
-            x = F.relu(self.conv1(x, inputInfo.set_input()))
-            x = F.relu(self.conv2(x, inputInfo.set_hidden()))
-            x = F.relu(self.conv3(x, inputInfo.set_hidden()))
-            x = F.relu(self.conv4(x, inputInfo.set_hidden()))
-            x = self.conv5(x, inputInfo.set_hidden())
-            return F.log_softmax(x, dim=1)
+    def forward(self, isFirstIter, isBackModeNet):
+        x = dataset.x
+        for i in range(0, self.num_layers):
+            if i == 0:
+                x = F.relu(self.convs[i](x, inputInfo.set_input(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet))
+            elif i < self.num_layers - 1:
+                x = F.relu(self.convs[i](x, inputInfo.set_hidden(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet))
+            else:
+                x = self.convs[i](x, inputInfo.set_hidden(), mask_input_props[i], back_input_props[i], isFirstIter, isBackModeNet)
+        return x
 
 model, dataset = Net(args.layers).to(device), dataset.to(device)
 if verbose_mode:

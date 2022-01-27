@@ -7,19 +7,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--groupsize_model', type=str, default='regression_equation', choices=['regression_equation', 'SAGPG', 'fixed_value'])
 args = parser.parse_args()
 
-run_GCN = True              # whether to run GCN model. 
-manual_mode = False         # whether to use the manually configure the setting.
-verbose_mode = False         # whether to printout more information such as the layerwise parameter.
+
 loadFromTxt = True         # whether to load data from a plain txt file.
 
-if run_GCN:
-    model = 'gcn'
-    warpPerBlock = 8        # only effective in manual model
-    hidden = [16] 
-else:
-    model = 'gin'
-    warpPerBlock = 2        # only effective in manual model 2 for citeseer 6 for remaining datasets
-    hidden = [64] 		
+model = 'gcn'
+warpPerBlock = 8        # only effective in manual model
+hidden = [16] 
 
 dataset = [
         ('cora' 	        , 1433	    , 7 ,  ),        #
@@ -59,10 +52,10 @@ for hid in hidden:
                     backMode = 'constant'
                     backsize = 32
                 
-                command = "python /home/yc/OSDI21_AE-master/GNNAdvisor/GNNA_main.py --dataset {} --dim {} --hidden {} \
+                command = "python /home/yc/OSDI21_AE-master/GNNAdvisor/gcn_main.py --dataset {} --dim {} --hidden {} \
                             --classes {} --layers {} --partSize {} --model {} --warpPerBlock {}\
                             --manual_mode {} --verbose_mode {} --loadFromTxt {} --dataDir {} --train_ratio {} --backsize_mode {} --backsize {}"
                 command = command.format(data, d, hid, c, layer, partsize, model, warpPerBlock,\
-                                        manual_mode, verbose_mode, loadFromTxt, dataDir, ratio, backMode, backsize)		
+                                        False, False, loadFromTxt, dataDir, ratio, backMode, backsize)		
                 # print(command)
                 os.system(command)

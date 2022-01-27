@@ -59,7 +59,7 @@ class custom_dataset(torch.nn.Module):
             dst_li = []
             start = time.perf_counter()
             for line in fp:
-                src, dst, weight = line.strip('\n').split()
+                src, dst = line.strip('\n').split()
                 src, dst = int(src), int(dst)
                 src_li.append(src)
                 dst_li.append(dst)
