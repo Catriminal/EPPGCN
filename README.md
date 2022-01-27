@@ -21,7 +21,7 @@ git clone https://github.com/Catriminal/GNNAdvisor.git
 
 > + `EPPGCN/`: the directory for our system and Python benchmark. 
 > > + `GCNConv/`: the C++/CUDA source code (`EPPGCN_kernel.cu`, `cuCompactor.cu`) for GCN sparse computation kernel and graph compaction, python binding of kernels (`EPPGCN.cpp`) and python `setup.py` installation script.
-> > + `gnn_conv.py`: the Python script for defining the GCN convolution at high-level.
+> > + `gcn_conv.py`: the Python script for defining the GCN convolution at high-level.
 > > + `param.py`: the Python script for defining the input-level properties and different rules for handling this properties to generate performance-related configuration.
 > > + `dataset.py`: the Python loader for datasets from either plain `.txt` edgeList files or binary `.npy` file.
 

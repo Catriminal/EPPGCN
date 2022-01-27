@@ -11,7 +11,7 @@ from scipy.sparse import *
 
 import GNNAdvisor as GNNA           # import GNNAdvisor
 
-from gnn_conv import *
+from gcn_conv import *
 from dataset import *
 
 from net_pred import *
