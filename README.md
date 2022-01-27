@@ -1,6 +1,7 @@
-# GNNAdvisor
+# Accelerating Backward Aggregation in GCN Training with Execution Path Preparing on GPUs
 
 ## 1. Getting Started Instructions.
+
 + **Clone this project**
 ```shell
 git clone https://github.com/Catriminal/GNNAdvisor.git
@@ -8,7 +9,7 @@ git clone https://github.com/Catriminal/GNNAdvisor.git
 
 + **Hardware**: 
 > + `CPU x86_64` with host memory >= 32GB. (Tested on Intel Xeon Silver 4110 (8-core 16-thread)  CPU  with 64GB host memory).
-> + `NVIDIA GPU (arch>=sm_60)` with devcie memory >= 16GB. Tested on NVIDIA Tesla P100(`sm_70`). 
+> + `NVIDIA GPU (arch>=sm_60)` with device memory >= 16GB. Tested on NVIDIA Tesla P100(`sm_60`). 
 
 + **OS & Compiler**: 
 > + `Ubuntu 16.04+`
@@ -18,23 +19,17 @@ git clone https://github.com/Catriminal/GNNAdvisor.git
 
 + **Important Files/Directories**
 
-> + `rabbit_module/`: contains the source of rabbit reordering and python binding.
-> + `GNNAdvisor/`: the directory for GNNAdvisor and Python benchmark. 
-> > + `GNNConv/`: the C++/CUDA source code (`GNNAdvisor_kernel.cu`, `cuCompactor.cu`) for GCN sparse computation kernel and graph compaction, python binding of kernels (`GNNAdvisor.cpp`) and python `setup.py` installation script.
+> + `EPPGCN/`: the directory for our system and Python benchmark. 
+> > + `GCNConv/`: the C++/CUDA source code (`EPPGCN_kernel.cu`, `cuCompactor.cu`) for GCN sparse computation kernel and graph compaction, python binding of kernels (`EPPGCN.cpp`) and python `setup.py` installation script.
 > > + `gnn_conv.py`: the Python script for defining the GCN convolution at high-level.
-> > + `param.py`: the Python script for defining the input-level properties and different rules for handling this properties to generate performance-related configuration, such as `warpPerBlock`.
+> > + `param.py`: the Python script for defining the input-level properties and different rules for handling this properties to generate performance-related configuration.
 > > + `dataset.py`: the Python loader for datasets from either plain `.txt` edgeList files or binary `.npy` file.
 
 
 ### **Step-1: Environment Setup** 
-#### 1) Install system packages for compiling rabbit reordering (root user required). 
-+ **`libboost`**: `sudo apt-get install libboost-all-dev`.
-+ **`tcmalloc`**: `sudo apt-get install libgoogle-perftools-dev`.
-+ **`cmake`**: `sudo apt-get update && sudo apt-get -y install cmake protobuf-compiler`.
 
-
-#### 2) Install Pytorch environment.
-+ Install **`conda`** on system **[Toturial](https://www.digitalocean.com/community/tutorials/how-to-install-anaconda-on-ubuntu-18-04-quickstart)**.
+#### 1) Install Pytorch environment.
++ Install **`conda`** on system **[Tutorial](https://www.digitalocean.com/community/tutorials/how-to-install-anaconda-on-ubuntu-18-04-quickstart)**.
 + Create a **`conda`** environment: 
 ```shell
 conda create -n env_name python=3.6
@@ -49,12 +44,6 @@ pip install torch==1.7.0+cu101 torchvision==0.8.0+cu101 torchaudio==0.7.0 -f htt
 pip install tqdm
 pip install scipy
 ```
-+ Install [**`Deep Graph Library (DGL)`**](https://github.com/dmlc/dgl).
-```shell
-conda install -c dglteam dgl-cuda10.1
-pip install torch requests
-```
-
 + Install [**`Pytorch-Geometric (PyG)`**](https://github.com/rusty1s/pytorch_geometric).
 ```shell
 pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.0+cu101.html
@@ -66,7 +55,6 @@ pip install torch-geometric
 
 + Install GNNAdvisor Pytorch Binding.
 > + Go to `GNNAdvisor/GNNConv`, then `python setup.py install` to install the GNNAdvisor modules.
-> + Go to `rabbit_module/src`, then `python setup.py install` to install the rabbit reordering modules.
 
 ### **Step-2: Download the graph datasets.**
 + The graph data files we used can all be found in the references of the paper.
@@ -90,22 +78,38 @@ pip install torch-geometric
 >   git checkout initial
 >   ```
 >
+> + Go to `GNNAdvisor/GNNConv` directory.
+>
+> + Install GNNAdvisor Pytorch Binding.
+>
+>   ```shell
+>   python setup.py install
+>   ```
+>
 > + Go to `GNNAdvisor/` directory.
 >
 > + `./0_bench_GNNA_GCN.py` to run baseline GNNAdvisor's 2-layer GCN model and report 100 epoch runtime for all evaluated datasets.
 
-+ **Running GNNAdvisor**.
++ **Running our system**.
 > + Checkout git branch to master.
 >
 >   ```shell
 >   git checkout master
 >   ```
 >
-> + Go to `GNNAdvisor/` directory. 
+> + Go to `EPPGCN/GCNConv` directory.
 >
-> + `./0_bench_GNNA_GCN.py` to run our GNNAdvisor's multi-layer GCN model and report 100 epoch runtime for all evaluated datasets in different train ratios and numbers of layers.
+> + Install our system Pytorch Binding.
 >
-> + Set parameters `--partsize_model`  to choose different ways to decide `partsize` in backward process. There are three options for this parameter: `use_map`, `use_net` and `use_32`. `use_map` uses a linear regression equation, `use_net` uses a trained neural network and `use_32` uses a fixed constant of 32.
+>   ```shell
+>   python setup.py install
+>   ```
+>
+> + Go to `EPPGCN/` directory. 
+>
+> + `./0_bench_GNNA_GCN.py` to run our system multi-layer GCN model and report 100 epoch runtime for all evaluated datasets in different train ratios and numbers of layers.
+>
+> + Set parameters `--groupsize_model`  to choose different ways to decide `groupsize` in backward process. There are three options for this parameter: `regression_equation`, `SAGPG` and `fixed_value`. `regression_equation` uses a linear regression equation, `SAGPG` uses a trained neural network and `fixed_value` uses a fixed constant of 32.
 >
 > +  Stand alone running `GNNA_main.py` with specified parameters.
 > > + `--dataset`: the name of the dataset.
@@ -114,28 +118,14 @@ pip install torch-geometric
 > > + `--classes`: the number of output classes, default: 22.
 > > + `--layers`: the number of layers, default: 2.
 > > + `--train_ratio`: the ratio of training set, default: 0.1
-> > + `--partSize`: the size of neighbor-group in forward process, default: 32. 
-> > + `--dimWorker`: the number of worker threads (**<=32**), default: 32.
-> > + `--warpPerBlock`: the number of warp per block in forward process, default: 8, recommended: GCN: (8).
-> > + `--sharedMem`: the shared memory size for each Stream-Multiprocessor on NVIDIA GPUs in . A reference for different GPU architecture and its shared memory size can be found at [here](https://en.wikipedia.org/wiki/CUDA).
 > > + `--num_epoches`: the number of epoches for training, default: 100.
-> > + `--loadFromTxt`: If this flag is `True`, it will load the graph TXT edge list, where each line is an `s1 d1`. default: `False` (load from `.npz` which is fast).
-> > + `--enable_rabbit`: If this flag is `True`, it will be possible to use the rabbit-reordering routine. Otherwise, it will skip rabbit reordering for both **auto** and **manual** mode.
-
-**Note**
-
-> + We focus on the training evaluation of the GCNs, and the reported time per epoch only includes the GCN model forward and backward computation, excluding the data loading and some preprocessing. 
 
 
 # Reference
-+ [**Deep Graph Library**](https://github.com/dmlc/dgl) <br>
-Wang, Minjie, et al. 
-**Deep graph library: A graph-centric, highly-performant package for graph neural networks.**. *The International Conference on Learning Representations (ICLR), 2019.*
 + [**Pytorch Geometric**](https://github.com/rusty1s/pytorch_geometric) <br>
   Fey, Matthias, and Jan Eric Lenssen. 
   **Fast graph representation learning with PyTorch Geometric.** 
   *The International Conference on Learning Representations (ICLR), 2019.*
-+ [**Rabbit Order**](https://github.com/araij/rabbit_order) <br>
-  J. Arai, H. Shiokawa, T. Yamamuro, M. Onizuka, and S. Iwamura. 
-  **Rabbit Order: Just-in-time Parallel Reordering for Fast Graph Analysis.** 
-  *IEEE International Parallel and Distributed Processing Symposium (IPDPS), 2016.*
++ [**GNNAdvisor**](https://github.com/YukeWang96/OSDI21_AE)<br>
+  Yuke Wang, Boyuan Feng, et al. 
+  **GNNAdvisor: An Efficient Runtime System for GNN Acceleration on GPUs**. *USENIX Symposium on Operating Systems Design and Implementation (OSDI), 2021*

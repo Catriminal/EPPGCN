@@ -4,11 +4,10 @@ import argparse
 os.environ["PYTHONWARNINGS"] = "ignore"
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--partsize_model', type=str, default='use_map', choices=['use_map', 'use_net', 'use_32'],  help="map or net or 32")
+parser.add_argument('--groupsize_model', type=str, default='regression_equation', choices=['regression_equation', 'SAGPG', 'fixed_value'])
 args = parser.parse_args()
 
 run_GCN = True              # whether to run GCN model. 
-enable_rabbit = False        # whether to enable rabbit reordering in auto and manual mode.
 manual_mode = False         # whether to use the manually configure the setting.
 verbose_mode = False         # whether to printout more information such as the layerwise parameter.
 loadFromTxt = True         # whether to load data from a plain txt file.
@@ -54,16 +53,16 @@ for hid in hidden:
                 dataDir = "/home/yc/data_scale_test/" + data
                 backsize = 0
                 backMode = 'map'
-                if args.partsize_model == "use_net":
+                if args.groupsize_model == "SAGPG":
                     backMode = 'net'
-                elif args.partsize_model == "use_32":
+                elif args.groupsize_model == "fixed_value":
                     backMode = 'constant'
                     backsize = 32
                 
                 command = "python /home/yc/OSDI21_AE-master/GNNAdvisor/GNNA_main.py --dataset {} --dim {} --hidden {} \
                             --classes {} --layers {} --partSize {} --model {} --warpPerBlock {}\
-                            --manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {} --train_ratio {} --backsize_mode {} --backsize {}"
+                            --manual_mode {} --verbose_mode {} --loadFromTxt {} --dataDir {} --train_ratio {} --backsize_mode {} --backsize {}"
                 command = command.format(data, d, hid, c, layer, partsize, model, warpPerBlock,\
-                                        manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir, ratio, backMode, backsize)		
+                                        manual_mode, verbose_mode, loadFromTxt, dataDir, ratio, backMode, backsize)		
                 # print(command)
                 os.system(command)

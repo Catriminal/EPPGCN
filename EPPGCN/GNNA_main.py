@@ -39,7 +39,6 @@ parser.add_argument("--sharedMem", type=int, default=100, help="shared memory si
 # Additional flags for studies.
 parser.add_argument('--manual_mode', type=str, choices=['True', 'False'], default='False', help="True: use manual config, False: auto config, default: True")
 parser.add_argument('--verbose_mode', type=str, choices=['True', 'False'], default='False', help="True: verbose mode, False: simple mode, default: False")
-parser.add_argument('--enable_rabbit', type=str, choices=['True', 'False'], default='False', help="True: enable rabbit reordering, False, disable rabbit reordering, default: False (disable for both manual and auto mode).")
 parser.add_argument('--loadFromTxt', type=str, choices=['True', 'False'], default='True', help="True: load the graph TXT edge list, False: load from .npy, default: False (load from npz fast)")
 parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], default='False', help="True: profile the single SpMM (neighbor aggregation) kernel for number epoches times")
 parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], default='False', help="True: verify the output correctness of a single SpMM (neighbor aggregation) kernel against the CPU reference implementation.")
@@ -58,7 +57,6 @@ print("||" + args.dataset + "   " + str(args.train_ratio) + "   " + str(args.lay
 partSize, dimWorker, warpPerBlock, sharedMem = args.partSize, args.dimWorker, args.warpPerBlock, args.sharedMem
 manual_mode = args.manual_mode == 'True'
 verbose_mode = args.verbose_mode == 'True'
-enable_rabbit = args.enable_rabbit == 'True'
 loadFromTxt = args.loadFromTxt == 'True'
 single_spmm = args.single_spmm == 'True'
 verify_spmm = args.verify_spmm == 'True'
@@ -90,7 +88,7 @@ degrees = dataset.degrees
 ####################################
 inputInfo = inputProperty(row_pointers, column_index, degrees, 
                             partSize, dimWorker, warpPerBlock, sharedMem,
-                            hiddenDim=args.hidden, dataset_obj=dataset, enable_rabbit=enable_rabbit,
+                            hiddenDim=args.hidden, dataset_obj=dataset,
                             manual_mode=manual_mode, verbose=verbose_mode)
 
 ####################################
@@ -123,10 +121,6 @@ partPtr, part2Node = GNNA.build_part(inputInfo.partSize, inputInfo.row_pointers)
 build_neighbor_parts = time.perf_counter() - start
 if verbose_mode:
     print("# Build nb_part (s): {:.3f}".format(build_neighbor_parts))
-
-# inputInfo.partPtr = partPtr.int()
-# inputInfo.part2Node = part2Node.int()
-# inputInfo.reorder()
 
 inputInfo.row_pointers  = inputInfo.row_pointers.to(device)
 inputInfo.column_index  = inputInfo.column_index.to(device)

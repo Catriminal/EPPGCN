@@ -7,10 +7,10 @@ setup(
         CUDAExtension(
         name='GNNAdvisor', 
         sources=[   
-                    'GNNAdvisor.cpp', 
+                    'EPPGCN.cpp', 
                     'cuCompactor.cu',
                     'cuda_error_check.cu',
-                    'GNNAdvisor_kernel.cu'
+                    'EPPGCN_kernel.cu'
                 ],
         extra_compile_args={'cxx': ['-O3', '-fopenmp'],
                             'nvcc': []}
