@@ -53,14 +53,14 @@ pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.7.0+c
 pip install torch-geometric
 ```
 
-+ Install GNNAdvisor Pytorch Binding.
-> + Go to `GNNAdvisor/GNNConv`, then `python setup.py install` to install the GNNAdvisor modules.
++ Install our system Pytorch Binding.
+> + Go to `EPPGCN/GCNConv`, then `python setup.py install` to install the our system modules.
 
 ### **Step-2: Download the graph datasets.**
 + The graph data files we used can all be found in the references of the paper.
 + The format of the graph data file should be SNAP, using '\t' as a separator for each row of vertex ids.
 + We use mask to represent the training set. The format of the mask file should be a text file consisting of 0s and 1s, with the number of lines equal to the number of vertices of the graph.
-+ Note the modification of the data storage path in `0_bench_GNNA_GCN.py`.
++ Note the modification of the data storage path in `bench_EPPGCN.py`.
 + Note that node inital embeeding is not included, and we generate an all 1s embeeding matrix according to users `input dimension` parameter at the runtime for just performance evaluation.
 
 ## 3. Detailed Instructions.
@@ -107,7 +107,7 @@ pip install torch-geometric
 >
 > + Go to `EPPGCN/` directory. 
 >
-> + `./0_bench_GNNA_GCN.py` to run our system multi-layer GCN model and report 100 epoch runtime for all evaluated datasets in different train ratios and numbers of layers.
+> + `./bench_EPPGCN.py` to run our system multi-layer GCN model and report 100 epoch runtime for all evaluated datasets in different train ratios and numbers of layers.
 >
 > + Set parameters `--groupsize_model`  to choose different ways to decide `groupsize` in backward process. There are three options for this parameter: `regression_equation`, `SAGPG` and `fixed_value`. `regression_equation` uses a linear regression equation, `SAGPG` uses a trained neural network and `fixed_value` uses a fixed constant of 32.
 >
